@@ -28,6 +28,8 @@ public class CameraActivity extends Activity {
     protected void onPause() {
         super.onPause();
 
+        //Log.i("CameraActivity", "Pause");
+
         if (camera != null) {
             view.setCamera(null);
             camera.release();
@@ -39,13 +41,15 @@ public class CameraActivity extends Activity {
     protected void onResume() {
         super.onResume();
 
+        //Log.i("CameraActivity", "Resume");
+
         try {
             camera = Camera.open();
         } catch (Exception e) {
             Log.d("CameraActivity", "Couldn't open camera: " + e.getMessage());
             return;
         }
-        camera.setDisplayOrientation(90);
+        //camera.setDisplayOrientation(90);
         view.setCamera(camera);
     }
 }
