@@ -1,0 +1,12 @@
+# ignore emacs backup files
+*~
+\#*\#
+.\#*
+
+# ignore vim backup files
+*.swp
+*.swo
+[#]*[#]
+.#*
+
+build/
