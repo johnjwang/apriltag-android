@@ -11,6 +11,7 @@ import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 
 import java.io.IOException;
+import java.util.ArrayList;
 
 /**
  * TODO: document your custom view class.
@@ -19,6 +20,7 @@ public class TagView extends SurfaceView implements SurfaceHolder.Callback, Came
     private Camera camera;
     private byte[] buf;
     private int[] argb;
+    private Bitmap bm;
     private SurfaceTexture st = new SurfaceTexture(0);
 
     public TagView(Context context) {
@@ -51,7 +53,8 @@ public class TagView extends SurfaceView implements SurfaceHolder.Callback, Came
             if (buf == null || nbytes < buf.length) {
                 Log.i("TagView", "Allocating buf of size " + nbytes);
                 buf = new byte[nbytes];
-                argb = new int[size.width * size.height];
+                //argb = new int[size.width * size.height];
+                bm = Bitmap.createBitmap(size.height, size.width, Bitmap.Config.ARGB_8888);
             }
 
             camera.addCallbackBuffer(buf);
@@ -94,11 +97,14 @@ public class TagView extends SurfaceView implements SurfaceHolder.Callback, Came
         if (this.camera == null)
             return;
 
-        // TODO actual processing here
-        // Pass bytes to apriltag via JNI, get detections back
-        // YUV -> RGB in native code or OpenGL?
         Camera.Size size = camera.getParameters().getPreviewSize();
-        YUV_NV21_TO_RGB(argb, bytes, size.width, size.height);
+
+        // Pass bytes to apriltag via JNI, get detections back
+        ArrayList<ApriltagDetection> detections =
+                ApriltagNative.apriltag_detect_yuv(bytes, size.width, size.height);
+
+        // TODO Render YUV in OpenGL
+        ApriltagNative.yuv_to_rgb(bytes, size.width, size.height, bm);
 
         // Release the callback buffer
         camera.addCallbackBuffer(bytes);
@@ -107,14 +113,31 @@ public class TagView extends SurfaceView implements SurfaceHolder.Callback, Came
         SurfaceHolder holder = getHolder();
         Canvas canvas = holder.lockCanvas();
 
-        Bitmap bm = Bitmap.createBitmap(argb, size.height, size.width, Bitmap.Config.ARGB_8888);
         canvas.drawBitmap(bm, 0, 0, null);
 
         Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
-        p.setColor(0xffffffff);
+        p.setStrokeWidth(5.0f);
         p.setTextSize(50);
-        canvas.drawText(Integer.toString(frameCount), 100, 100, p);
+        for (ApriltagDetection det : detections) {
+            Log.i("TagView", "Tag detected " + det.id);
+            p.setARGB(0xff, 0, 0xff, 0);
+            canvas.drawLine(size.height-(float)det.p[1], (float)det.p[0],
+                            size.height-(float)det.p[3], (float)det.p[2], p);
+            p.setARGB(0xff, 0xff, 0, 0);
+            canvas.drawLine(size.height-(float)det.p[1], (float)det.p[0],
+                            size.height-(float)det.p[7], (float)det.p[6], p);
+            p.setARGB(0xff, 0, 0, 0xff);
+            canvas.drawLine(size.height-(float)det.p[3], (float)det.p[2],
+                            size.height-(float)det.p[5], (float)det.p[4], p);
+            canvas.drawLine(size.height-(float)det.p[5], (float)det.p[4],
+                            size.height-(float)det.p[7], (float)det.p[6], p);
+            p.setARGB(0xff, 0, 0x99, 0xff);
+            canvas.drawText(Integer.toString(det.id),
+                            size.height-(float)det.c[1], (float)det.c[0], p);
+        }
 
+        p.setColor(0xffffffff);
+        canvas.drawText(Integer.toString(frameCount), 100, 100, p);
         holder.unlockCanvasAndPost(canvas);
     }
 
