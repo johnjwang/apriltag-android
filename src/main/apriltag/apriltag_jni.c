@@ -5,10 +5,17 @@
 
 #include "apriltag.h"
 #include "tag36h11.h"
+#include "tag36h10.h"
+#include "tag36artoolkit.h"
+#include "tag25h9.h"
+#include "tag25h7.h"
+#include "tag16h5.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+struct {
+    apriltag_detector_t *td;
+    apriltag_family_t *tf;
+    char *tfname;
+} state;
 
 /*
  * Class:     edu_umich_eecs_april_apriltag_ApriltagNative
@@ -77,18 +84,76 @@ JNIEXPORT void JNICALL Java_edu_umich_eecs_april_apriltag_ApriltagNative_yuv_1to
 
 /*
  * Class:     edu_umich_eecs_april_apriltag_ApriltagNative
+ * Method:    apriltag_init
+ * Signature: (Ljava/lang/String;IDDI)V
+ */
+JNIEXPORT void JNICALL Java_edu_umich_eecs_april_apriltag_ApriltagNative_apriltag_1init
+        (JNIEnv *env, jclass cls, jstring _tfname, jint errorbits, jdouble decimate,
+         jdouble sigma, jint nthreads)
+{
+    // Do cleanup in case we're already initialized
+    if (state.td) {
+        apriltag_detector_destroy(state.td);
+        state.td = NULL;
+    }
+    if (state.tf) {
+        if (!strcmp(state.tfname, "tag36h11"))
+            tag36h11_destroy(state.tf);
+        else if (!strcmp(state.tfname, "tag36h10"))
+            tag36h10_destroy(state.tf);
+        else if (!strcmp(state.tfname, "tag36artoolkit"))
+            tag36artoolkit_destroy(state.tf);
+        else if (!strcmp(state.tfname, "tag25h9"))
+            tag25h9_destroy(state.tf);
+        else if (!strcmp(state.tfname, "tag25h7"))
+            tag25h7_destroy(state.tf);
+        else if (!strcmp(state.tfname, "tag16h5"))
+            tag16h5_destroy(state.tf);
+        free(state.tfname);
+        state.tf = NULL;
+        state.tfname = NULL;
+    }
+
+    // Initialize state
+    const char *tfname = (*env)->GetStringUTFChars(env, _tfname, NULL);
+    state.tfname = strdup(tfname);
+    (*env)->ReleaseStringUTFChars(env, _tfname, tfname);
+
+    if (!strcmp(state.tfname, "tag36h11"))
+        state.tf = tag36h11_create();
+    else if (!strcmp(state.tfname, "tag36h10"))
+        state.tf = tag36h10_create();
+    else if (!strcmp(state.tfname, "tag36artoolkit"))
+        state.tf = tag36artoolkit_create();
+    else if (!strcmp(state.tfname, "tag25h9"))
+        state.tf = tag25h9_create();
+    else if (!strcmp(state.tfname, "tag25h7"))
+        state.tf = tag25h7_create();
+    else if (!strcmp(state.tfname, "tag16h5"))
+        state.tf = tag16h5_create();
+    state.td = apriltag_detector_create();
+    apriltag_detector_add_family_bits(state.td, state.tf, errorbits);
+    state.td->quad_decimate = decimate;
+    state.td->quad_sigma = sigma;
+    state.td->nthreads = nthreads;
+}
+
+/*
+ * Class:     edu_umich_eecs_april_apriltag_ApriltagNative
  * Method:    apriltag_detect_yuv
  * Signature: ([BII)Ljava/util/ArrayList;
  */
 JNIEXPORT jobject JNICALL Java_edu_umich_eecs_april_apriltag_ApriltagNative_apriltag_1detect_1yuv
-        (JNIEnv *env, jclass cls, jbyteArray _buf, jint width, jint height)
-{
-    apriltag_family_t *tf = tag36h11_create();
-    apriltag_detector_t *td = apriltag_detector_create();
-    apriltag_detector_add_family(td, tf);
-    td->quad_decimate = 2.0;
-    td->quad_sigma = 0.0;
-    td->nthreads = 1;
+        (JNIEnv *env, jclass cls, jbyteArray _buf, jint width, jint height) {
+    // If not initialized, init with default settings
+    if (!state.td) {
+        state.tf = tag36h11_create();
+        state.td = apriltag_detector_create();
+        apriltag_detector_add_family_bits(state.td, state.tf, 2);
+        state.td->quad_decimate = 2.0;
+        state.td->quad_sigma = 0.0;
+        state.td->nthreads = 4;
+    }
 
     // Use the luma channel (the first width*height elements)
     // as grayscale input image
@@ -99,7 +164,7 @@ JNIEXPORT jobject JNICALL Java_edu_umich_eecs_april_apriltag_ApriltagNative_apri
             .width = width,
             .stride = width
     };
-    zarray_t *detections = apriltag_detector_detect(td, &im);
+    zarray_t *detections = apriltag_detector_detect(state.td, &im);
     (*env)->ReleaseByteArrayElements(env, _buf, buf, 0);
 
     // Get ArrayList methods
@@ -156,12 +221,6 @@ JNIEXPORT jobject JNICALL Java_edu_umich_eecs_april_apriltag_ApriltagNative_apri
 
     // Cleanup
     apriltag_detections_destroy(detections);
-    tag36h11_destroy(tf);
-    apriltag_detector_destroy(td);
 
     return al;
 }
-
-#ifdef __cplusplus
-}
-#endif

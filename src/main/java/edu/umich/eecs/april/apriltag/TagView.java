@@ -119,7 +119,10 @@ public class TagView extends SurfaceView implements SurfaceHolder.Callback, Came
         p.setStrokeWidth(5.0f);
         p.setTextSize(50);
         for (ApriltagDetection det : detections) {
-            Log.i("TagView", "Tag detected " + det.id);
+            //Log.i("TagView", "Tag detected " + det.id);
+
+            // The XY swap is due to portrait mode weirdness
+            // The camera image is 1920x1080 but the portrait bitmap is 1080x1920
             p.setARGB(0xff, 0, 0xff, 0);
             canvas.drawLine(size.height-(float)det.p[1], (float)det.p[0],
                             size.height-(float)det.p[3], (float)det.p[2], p);
@@ -139,39 +142,5 @@ public class TagView extends SurfaceView implements SurfaceHolder.Callback, Came
         p.setColor(0xffffffff);
         canvas.drawText(Integer.toString(frameCount), 100, 100, p);
         holder.unlockCanvasAndPost(canvas);
-    }
-
-    public static void YUV_NV21_TO_RGB(int[] argb, byte[] yuv, int width, int height) {
-        final int frameSize = width * height;
-
-        final int ii = 0;
-        final int ij = 0;
-        final int di = +1;
-        final int dj = +1;
-
-        for (int i = 0, ci = ii; i < height; ++i, ci += di) {
-            for (int j = 0, cj = ij; j < width; ++j, cj += dj) {
-                int y = (0xff & ((int) yuv[ci * width + cj]));
-                int v = (0xff & ((int) yuv[frameSize + (ci >> 1) * width + (cj & ~1) + 0]));
-                int u = (0xff & ((int) yuv[frameSize + (ci >> 1) * width + (cj & ~1) + 1]));
-                y = y < 16 ? 16 : y;
-
-                int a0 = 1192 * (y - 16);
-                int a1 = 1634 * (v - 128);
-                int a2 = 832 * (v - 128);
-                int a3 = 400 * (u - 128);
-                int a4 = 2066 * (u - 128);
-
-                int r = (a0 + a1) >> 10;
-                int g = (a0 - a2 - a3) >> 10;
-                int b = (a0 + a4) >> 10;
-
-                r = r < 0 ? 0 : (r > 255 ? 255 : r);
-                g = g < 0 ? 0 : (g > 255 ? 255 : g);
-                b = b < 0 ? 0 : (b > 255 ? 255 : b);
-
-                argb[(j+1)*height - i-1] = 0xff000000 | (r << 16) | (g << 8) | b;
-            }
-        }
     }
 }
