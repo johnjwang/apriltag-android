@@ -14,7 +14,7 @@
 struct {
     apriltag_detector_t *td;
     apriltag_family_t *tf;
-    char *tfname;
+    void(*tf_destroy)(apriltag_family_t*);
 } state;
 
 /*
@@ -89,48 +89,46 @@ JNIEXPORT void JNICALL Java_edu_umich_eecs_april_apriltag_ApriltagNative_yuv_1to
  */
 JNIEXPORT void JNICALL Java_edu_umich_eecs_april_apriltag_ApriltagNative_apriltag_1init
         (JNIEnv *env, jclass cls, jstring _tfname, jint errorbits, jdouble decimate,
-         jdouble sigma, jint nthreads)
-{
+         jdouble sigma, jint nthreads) {
     // Do cleanup in case we're already initialized
     if (state.td) {
         apriltag_detector_destroy(state.td);
         state.td = NULL;
     }
     if (state.tf) {
-        if (!strcmp(state.tfname, "tag36h11"))
-            tag36h11_destroy(state.tf);
-        else if (!strcmp(state.tfname, "tag36h10"))
-            tag36h10_destroy(state.tf);
-        else if (!strcmp(state.tfname, "tag36artoolkit"))
-            tag36artoolkit_destroy(state.tf);
-        else if (!strcmp(state.tfname, "tag25h9"))
-            tag25h9_destroy(state.tf);
-        else if (!strcmp(state.tfname, "tag25h7"))
-            tag25h7_destroy(state.tf);
-        else if (!strcmp(state.tfname, "tag16h5"))
-            tag16h5_destroy(state.tf);
-        free(state.tfname);
+        state.tf_destroy(state.tf);
         state.tf = NULL;
-        state.tfname = NULL;
     }
 
     // Initialize state
     const char *tfname = (*env)->GetStringUTFChars(env, _tfname, NULL);
-    state.tfname = strdup(tfname);
+
+    if (!strcmp(tfname, "tag36h11")) {
+        state.tf = tag36h11_create();
+        state.tf_destroy = tag36h11_destroy;
+    } else if (!strcmp(tfname, "tag36h10")) {
+        state.tf = tag36h10_create();
+        state.tf_destroy = tag36h10_destroy;
+    } else if (!strcmp(tfname, "tag36artoolkit")) {
+        state.tf = tag36artoolkit_create();
+        state.tf_destroy = tag36artoolkit_destroy;
+    } else if (!strcmp(tfname, "tag25h9")) {
+        state.tf = tag25h9_create();
+        state.tf_destroy = tag25h9_destroy;
+    } else if (!strcmp(tfname, "tag25h7")) {
+        state.tf = tag25h7_create();
+        state.tf_destroy = tag25h7_destroy;
+    } else if (!strcmp(tfname, "tag16h5")) {
+        state.tf = tag16h5_create();
+        state.tf_destroy = tag16h5_destroy;
+    } else {
+        __android_log_print(ANDROID_LOG_ERROR, "apriltag_jni",
+                            "invalid tag family: %s", tfname);
+        (*env)->ReleaseStringUTFChars(env, _tfname, tfname);
+        return;
+    }
     (*env)->ReleaseStringUTFChars(env, _tfname, tfname);
 
-    if (!strcmp(state.tfname, "tag36h11"))
-        state.tf = tag36h11_create();
-    else if (!strcmp(state.tfname, "tag36h10"))
-        state.tf = tag36h10_create();
-    else if (!strcmp(state.tfname, "tag36artoolkit"))
-        state.tf = tag36artoolkit_create();
-    else if (!strcmp(state.tfname, "tag25h9"))
-        state.tf = tag25h9_create();
-    else if (!strcmp(state.tfname, "tag25h7"))
-        state.tf = tag25h7_create();
-    else if (!strcmp(state.tfname, "tag16h5"))
-        state.tf = tag16h5_create();
     state.td = apriltag_detector_create();
     apriltag_detector_add_family_bits(state.td, state.tf, errorbits);
     state.td->quad_decimate = decimate;
@@ -153,6 +151,8 @@ JNIEXPORT jobject JNICALL Java_edu_umich_eecs_april_apriltag_ApriltagNative_apri
         state.td->quad_decimate = 2.0;
         state.td->quad_sigma = 0.0;
         state.td->nthreads = 4;
+        __android_log_write(ANDROID_LOG_INFO, "apriltag_jni",
+                            "using default parameters");
     }
 
     // Use the luma channel (the first width*height elements)
@@ -176,16 +176,6 @@ JNIEXPORT jobject JNICALL Java_edu_umich_eecs_april_apriltag_ApriltagNative_apri
     }
     jmethodID al_constructor = (*env)->GetMethodID(env, al_cls, "<init>", "()V");
     jmethodID al_add = (*env)->GetMethodID(env, al_cls, "add", "(Ljava/lang/Object;)Z");
-    if (!al_constructor) {
-        __android_log_write(ANDROID_LOG_ERROR, "apriltag_jni",
-                            "couldn't find ArrayList constructor");
-        return NULL;
-    }
-    if (!al_add) {
-        __android_log_write(ANDROID_LOG_ERROR, "apriltag_jni",
-                            "couldn't find ArrayList add");
-        return NULL;
-    }
 
     // Get ApriltagDetection methods
     jclass ad_cls = (*env)->FindClass(env, "edu/umich/eecs/april/apriltag/ApriltagDetection");
@@ -195,6 +185,11 @@ JNIEXPORT jobject JNICALL Java_edu_umich_eecs_april_apriltag_ApriltagNative_apri
         return NULL;
     }
     jmethodID ad_constructor = (*env)->GetMethodID(env, ad_cls, "<init>", "()V");
+    if (!ad_constructor) {
+        __android_log_write(ANDROID_LOG_ERROR, "apriltag_jni",
+                            "couldn't find ApriltagDetection() constructor");
+        return NULL;
+    }
     jfieldID ad_id_field = (*env)->GetFieldID(env, ad_cls, "id", "I");
     jfieldID ad_hamming_field = (*env)->GetFieldID(env, ad_cls, "hamming", "I");
     jfieldID ad_c_field = (*env)->GetFieldID(env, ad_cls, "c", "[D");
