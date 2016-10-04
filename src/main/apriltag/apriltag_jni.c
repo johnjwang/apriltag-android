@@ -11,11 +11,69 @@
 #include "tag25h7.h"
 #include "tag16h5.h"
 
-struct {
+static struct {
     apriltag_detector_t *td;
     apriltag_family_t *tf;
     void(*tf_destroy)(apriltag_family_t*);
+
+    jclass al_cls;
+    jmethodID al_constructor, al_add;
+    jclass ad_cls;
+    jmethodID ad_constructor;
+    jfieldID ad_id_field, ad_hamming_field, ad_c_field, ad_p_field;
 } state;
+
+JNIEXPORT void JNICALL Java_edu_umich_eecs_april_apriltag_ApriltagNative_native_1init
+    (JNIEnv *env, jclass cls)
+{
+    // Just do method lookups once and cache the results
+
+    // Get ArrayList methods
+    jclass al_cls = (*env)->FindClass(env, "java/util/ArrayList");
+    if (!al_cls) {
+        __android_log_write(ANDROID_LOG_ERROR, "apriltag_jni",
+                            "couldn't find ArrayList class");
+        return;
+    }
+    state.al_cls = (*env)->NewGlobalRef(env, al_cls);
+
+    state.al_constructor = (*env)->GetMethodID(env, al_cls, "<init>", "()V");
+    state.al_add = (*env)->GetMethodID(env, al_cls, "add", "(Ljava/lang/Object;)Z");
+    if (!state.al_constructor || !state.al_add) {
+        __android_log_write(ANDROID_LOG_ERROR, "apriltag_jni",
+                            "couldn't find ArrayList methods");
+        return;
+    }
+
+    // Get ApriltagDetection methods
+    jclass ad_cls = (*env)->FindClass(env, "edu/umich/eecs/april/apriltag/ApriltagDetection");
+    if (!ad_cls) {
+        __android_log_write(ANDROID_LOG_ERROR, "apriltag_jni",
+                            "couldn't find ApriltagDetection class");
+        return;
+    }
+    state.ad_cls = (*env)->NewGlobalRef(env, ad_cls);
+
+    state.ad_constructor = (*env)->GetMethodID(env, ad_cls, "<init>", "()V");
+    if (!state.ad_constructor) {
+        __android_log_write(ANDROID_LOG_ERROR, "apriltag_jni",
+                            "couldn't find ApriltagDetection constructor");
+        return;
+    }
+
+    state.ad_id_field = (*env)->GetFieldID(env, ad_cls, "id", "I");
+    state.ad_hamming_field = (*env)->GetFieldID(env, ad_cls, "hamming", "I");
+    state.ad_c_field = (*env)->GetFieldID(env, ad_cls, "c", "[D");
+    state.ad_p_field = (*env)->GetFieldID(env, ad_cls, "p", "[D");
+    if (!state.ad_id_field ||
+            !state.ad_hamming_field ||
+            !state.ad_c_field ||
+            !state.ad_p_field) {
+        __android_log_write(ANDROID_LOG_ERROR, "apriltag_jni",
+                            "couldn't find ApriltagDetection fields");
+        return;
+    }
+}
 
 /*
  * Class:     edu_umich_eecs_april_apriltag_ApriltagNative
@@ -167,51 +225,26 @@ JNIEXPORT jobject JNICALL Java_edu_umich_eecs_april_apriltag_ApriltagNative_apri
     zarray_t *detections = apriltag_detector_detect(state.td, &im);
     (*env)->ReleaseByteArrayElements(env, _buf, buf, 0);
 
-    // Get ArrayList methods
-    jclass al_cls = (*env)->FindClass(env, "java/util/ArrayList");
-    if (!al_cls) {
-        __android_log_write(ANDROID_LOG_ERROR, "apriltag_jni",
-                            "couldn't find ArrayList class");
-        return NULL;
-    }
-    jmethodID al_constructor = (*env)->GetMethodID(env, al_cls, "<init>", "()V");
-    jmethodID al_add = (*env)->GetMethodID(env, al_cls, "add", "(Ljava/lang/Object;)Z");
-
-    // Get ApriltagDetection methods
-    jclass ad_cls = (*env)->FindClass(env, "edu/umich/eecs/april/apriltag/ApriltagDetection");
-    if (!ad_cls) {
-        __android_log_write(ANDROID_LOG_ERROR, "apriltag_jni",
-                            "couldn't find ApriltagDetection class");
-        return NULL;
-    }
-    jmethodID ad_constructor = (*env)->GetMethodID(env, ad_cls, "<init>", "()V");
-    if (!ad_constructor) {
-        __android_log_write(ANDROID_LOG_ERROR, "apriltag_jni",
-                            "couldn't find ApriltagDetection() constructor");
-        return NULL;
-    }
-    jfieldID ad_id_field = (*env)->GetFieldID(env, ad_cls, "id", "I");
-    jfieldID ad_hamming_field = (*env)->GetFieldID(env, ad_cls, "hamming", "I");
-    jfieldID ad_c_field = (*env)->GetFieldID(env, ad_cls, "c", "[D");
-    jfieldID ad_p_field = (*env)->GetFieldID(env, ad_cls, "p", "[D");
-
     // al = new ArrayList();
-    jobject al = (*env)->NewObject(env, al_cls, al_constructor);
+    jobject al = (*env)->NewObject(env, state.al_cls, state.al_constructor);
     for (int i = 0; i < zarray_size(detections); i += 1) {
         apriltag_detection_t *det;
         zarray_get(detections, i, &det);
 
         // ad = new ApriltagDetection();
-        jobject ad = (*env)->NewObject(env, ad_cls, ad_constructor);
-        (*env)->SetIntField(env, ad, ad_id_field, det->id);
-        (*env)->SetIntField(env, ad, ad_hamming_field, det->hamming);
-        jdoubleArray ad_c = (*env)->GetObjectField(env, ad, ad_c_field);
+        jobject ad = (*env)->NewObject(env, state.ad_cls, state.ad_constructor);
+        (*env)->SetIntField(env, ad, state.ad_id_field, det->id);
+        (*env)->SetIntField(env, ad, state.ad_hamming_field, det->hamming);
+        jdoubleArray ad_c = (*env)->GetObjectField(env, ad, state.ad_c_field);
         (*env)->SetDoubleArrayRegion(env, ad_c, 0, 2, det->c);
-        jdoubleArray ad_p = (*env)->GetObjectField(env, ad, ad_p_field);
+        jdoubleArray ad_p = (*env)->GetObjectField(env, ad, state.ad_p_field);
         (*env)->SetDoubleArrayRegion(env, ad_p, 0, 8, (double*)det->p);
 
         // al.add(ad);
-        (*env)->CallBooleanMethod(env, al, al_add, ad);
+        (*env)->CallBooleanMethod(env, al, state.al_add, ad);
+
+        // Need to respect the local reference limit
+        (*env)->DeleteLocalRef(env, ad);
     }
 
     // Cleanup
