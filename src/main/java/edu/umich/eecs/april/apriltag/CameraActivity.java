@@ -27,8 +27,10 @@ public class CameraActivity extends Activity {
     /** Release the camera when application focus is lost */
     protected void onPause() {
         super.onPause();
+        view.onPause();
 
         //Log.i("CameraActivity", "Pause");
+        // TODO move camera management to TagView class
 
         if (camera != null) {
             view.setCamera(null);
@@ -40,6 +42,7 @@ public class CameraActivity extends Activity {
     /** (Re-)initialize the camera */
     protected void onResume() {
         super.onResume();
+        view.onResume();
 
         //Log.i("CameraActivity", "Resume");
 
