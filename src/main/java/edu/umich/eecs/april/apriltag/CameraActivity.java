@@ -17,7 +17,7 @@ public class CameraActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        setContentView(R.layout.activity_camera);
+        setContentView(R.layout.main);
 
         view = new TagView(this);
         FrameLayout preview = (FrameLayout)findViewById(R.id.tag_view);
