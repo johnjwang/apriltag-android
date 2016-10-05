@@ -1,7 +1,11 @@
 package edu.umich.eecs.april.apriltag;
 
 import android.content.Context;
-import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.PixelFormat;
+import android.graphics.PorterDuff;
 import android.graphics.SurfaceTexture;
 import android.hardware.Camera;
 import android.opengl.GLES11Ext;
@@ -9,6 +13,7 @@ import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
 import android.opengl.Matrix;
 import android.util.Log;
+import android.view.SurfaceHolder;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -20,25 +25,26 @@ import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
 
 /**
- * TODO: document your custom view class.
+ * Draws camera images onto a GLSurfaceView and tag detections onto a custom overlay surface.
  */
 public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
+    private static final String TAG = "AprilTag";
     private Camera camera;
     private Camera.Size size;
     private ByteBuffer bb;
-    private Bitmap bm;
     private SurfaceTexture st = new SurfaceTexture(0);
+    private SurfaceHolder overlay;
 
-    public TagView(Context context) {
+    public TagView(Context context, SurfaceHolder overlay) {
         super(context);
+
+        this.overlay = overlay;
+        overlay.setFormat(PixelFormat.TRANSPARENT);
 
         // Use OpenGL 2.0
         setEGLContextClientVersion(2);
         setRenderer(new TagView.Renderer());
         setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY);
-
-        // deprecated setting, but required on Android versions prior to 3.0
-        //getHolder().setType(SurfaceHolder.SURFACE_TYPE_PUSH_BUFFERS);
     }
 
     static FloatBuffer createFloatBuffer(float[] coords) {
@@ -70,7 +76,7 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
         int error = GLES20.glGetError();
         if (error != GLES20.GL_NO_ERROR) {
             String msg = op + ": glError 0x" + Integer.toHexString(error);
-            Log.e("TagView", msg);
+            Log.e(TAG, msg);
             throw new RuntimeException(msg);
         }
     }
@@ -100,21 +106,26 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
                 "    gl_FragColor = texture2D(yTexture, vTextureCoord);\n" +
                 "}\n";
 
+        // TODO This is terrible
         private final float rectCoords[] = {
-                -1.0f, -1.0f,   // 0 bottom left
-                1.0f, -1.0f,   // 1 bottom right
-                -1.0f,  1.0f,   // 2 top left
-                1.0f,  1.0f,   // 3 top right
+//                -1.0f, -1.0f,   // 0 bottom left
+//                1.0f, -1.0f,   // 1 bottom right
+//                -1.0f,  1.0f,   // 2 top left
+//                1.0f,  1.0f,   // 3 top right
+                0, 0,
+                1080, 0,
+                0, 1920,
+                1080, 1920,
         };
         private final float rectTexCoords[] = {
-                1.0f, 1.0f,     // 3 top right
-                1.0f, 0.0f,     // 1 bottom right
                 0.0f, 1.0f,     // 2 top left
-                0.0f, 0.0f,     // 0 bottom left
+                0.0f, 0.0f,     // 3 top right
+                1.0f, 1.0f,     // 0 bottom left
+                1.0f, 0.0f,     // 1 bottom right
         };
         private final FloatBuffer rectCoordsBuf =
                 createFloatBuffer(rectCoords);
-        private final FloatBuffer rectCoordsTextBuf =
+        private final FloatBuffer rectCoordsTexBuf =
                 createFloatBuffer(rectTexCoords);
 
         int programId;
@@ -135,7 +146,7 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
         }
 
         public void onSurfaceCreated(GL10 gl, EGLConfig config) {
-            //Log.i("TagView", "surface created");
+            //Log.i(TAG, "surface created");
 
             // Compile the shader code into a GL program
             int vid = loadShader(GLES20.GL_VERTEX_SHADER, vertexShaderCode);
@@ -150,8 +161,8 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
             int[] linkStatus = new int[1];
             GLES20.glGetProgramiv(programId, GLES20.GL_LINK_STATUS, linkStatus, 0);
             if (linkStatus[0] != GLES20.GL_TRUE) {
-                Log.e("TagView", "Could not link program: ");
-                Log.e("TagView", GLES20.glGetProgramInfoLog(programId));
+                Log.e(TAG, "Could not link program: ");
+                Log.e(TAG, GLES20.glGetProgramInfoLog(programId));
                 GLES20.glDeleteProgram(programId);
             }
 
@@ -188,13 +199,15 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
         }
 
         public void onSurfaceChanged(GL10 gl, int width, int height) {
-            //Log.i("TagView", "surface changed");
+            Log.i(TAG, "surface changed: " + width + "x" + height);
+
             GLES20.glViewport(0, 0, width, height);
-            Matrix.orthoM(P, 0, -1, 1, -1, 1, -1, 1);
+            Matrix.orthoM(P, 0, 0, width, height, 0, -1, 1);
         }
 
         public void onDrawFrame(GL10 gl) {
-            //Log.i("TagView", "draw frame");
+            //Log.i(TAG, "draw frame");
+
             // Redraw background color
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
 
@@ -226,7 +239,7 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
 
             GLES20.glEnableVertexAttribArray(aTextureCoordLoc);
             GLES20.glVertexAttribPointer(aTextureCoordLoc, 2,
-                    GLES20.GL_FLOAT, false, 8, rectCoordsTextBuf);
+                    GLES20.GL_FLOAT, false, 8, rectCoordsTexBuf);
 
             GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
 
@@ -240,7 +253,6 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
         }
     }
 
-
     public void setCamera(Camera camera)
     {
         if (camera == this.camera)
@@ -250,7 +262,7 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
         if (this.camera != null) {
             try {
                 camera.stopPreview();
-                //Log.i("TagView", "Camera stop");
+                //Log.i(TAG, "Camera stop");
             } catch (Exception e) { }
         }
 
@@ -258,12 +270,12 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
         if (camera != null) {
             // Ensure space for frame (12 bits per pixel)
             size = camera.getParameters().getPreviewSize();
+            Log.i(TAG, "camera preview size: " + size.width + "x" + size.height);
             int nbytes = size.width * size.height * 3 / 2;
             if (bb == null || bb.capacity() < nbytes) {
                 // Allocate direct byte buffer so native code access won't require a copy
-                Log.i("TagView", "Allocating buf of size " + nbytes);
+                Log.i(TAG, "Allocating buf of size " + nbytes);
                 bb = ByteBuffer.allocateDirect(nbytes);
-                bm = Bitmap.createBitmap(size.height, size.width, Bitmap.Config.ARGB_8888);
             }
 
             camera.addCallbackBuffer(bb.array());
@@ -271,50 +283,47 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
                 // Give the camera an off-screen GL texture to render on
                 camera.setPreviewTexture(st);
             } catch (IOException e) {
-                Log.d("TagView", "Couldn't set preview display");
+                Log.d(TAG, "Couldn't set preview display");
                 return;
             }
             camera.setPreviewCallbackWithBuffer(this);
             camera.startPreview();
-            //Log.i("TagView", "Camera start");
+            //Log.i(TAG, "Camera start");
         }
         this.camera = camera;
 
     }
 
-    int frameCount;
-    @Override
+    private int frameCount;
     public void onPreviewFrame(byte[] bytes, Camera camera) {
         frameCount += 1;
-        Log.i("TagView", "frame count: " + frameCount);
+        //Log.i(TAG, "frame count: " + frameCount);
 
         // Check if camera has been released in another thread
         if (this.camera == null)
             return;
 
         // Pass bytes to apriltag via JNI, get detections back
+        //long start = System.currentTimeMillis();
         ArrayList<ApriltagDetection> detections =
                 ApriltagNative.apriltag_detect_yuv(bytes, size.width, size.height);
+        //long diff = System.currentTimeMillis() - start;
+        //Log.i(TAG, "tag detections took " + diff + " ms");
 
-        // TODO Render YUV in OpenGL
-        //ApriltagNative.yuv_to_rgb(bytes, size.width, size.height, bm);
+        // Render YUV image in OpenGL
         requestRender();
 
-        // Release the callback buffer
-        //camera.addCallbackBuffer(bytes);
-
-        /*
-        // Render some results (this is just a placeholder)
-        SurfaceHolder holder = getHolder();
-        Canvas canvas = holder.lockCanvas();
-        canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR);
-        //canvas.drawBitmap(bm, 0, 0, null);
+        //*
+        // Render detections
+        // TODO do this in OpenGL so frames are synced up properly
+        Canvas canvas = overlay.lockCanvas();
+        canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.SRC);
 
         Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
         p.setStrokeWidth(5.0f);
         p.setTextSize(50);
         for (ApriltagDetection det : detections) {
-            //Log.i("TagView", "Tag detected " + det.id);
+            //Log.i(TAG, "Tag detected " + det.id);
 
             // The XY swap is due to portrait mode weirdness
             // The camera image is 1920x1080 but the portrait bitmap is 1080x1920
@@ -336,7 +345,7 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
 
         p.setColor(0xffffffff);
         canvas.drawText(Integer.toString(frameCount), 100, 100, p);
-        holder.unlockCanvasAndPost(canvas);
+        overlay.unlockCanvasAndPost(canvas);
         //*/
     }
 }

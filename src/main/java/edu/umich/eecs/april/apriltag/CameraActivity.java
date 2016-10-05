@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.hardware.Camera;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.SurfaceView;
 import android.widget.FrameLayout;
 
 /**
@@ -11,29 +12,32 @@ import android.widget.FrameLayout;
  * status bar and navigation/system bar) with user interaction.
  */
 public class CameraActivity extends Activity {
+    private static final String TAG = "AprilTag";
     private Camera camera;
-    private TagView view;
+    private TagView tagView;
 
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
         setContentView(R.layout.activity_camera);
 
-        view = new TagView(this);
-        FrameLayout preview = (FrameLayout)findViewById(R.id.tag_view);
-        preview.addView(view);
+        SurfaceView overlayView = new SurfaceView(this);
+        tagView = new TagView(this, overlayView.getHolder());
+        FrameLayout layout = (FrameLayout)findViewById(R.id.tag_view);
+        layout.addView(overlayView);
+        layout.addView(tagView);
     }
 
     /** Release the camera when application focus is lost */
     protected void onPause() {
         super.onPause();
-        view.onPause();
+        tagView.onPause();
 
         //Log.i("CameraActivity", "Pause");
         // TODO move camera management to TagView class
 
         if (camera != null) {
-            view.setCamera(null);
+            tagView.setCamera(null);
             camera.release();
             camera = null;
         }
@@ -42,7 +46,7 @@ public class CameraActivity extends Activity {
     /** (Re-)initialize the camera */
     protected void onResume() {
         super.onResume();
-        view.onResume();
+        tagView.onResume();
 
         //Log.i("CameraActivity", "Resume");
 
@@ -53,6 +57,11 @@ public class CameraActivity extends Activity {
             return;
         }
         //camera.setDisplayOrientation(90);
-        view.setCamera(camera);
+        Camera.Parameters params = camera.getParameters();
+        for (Camera.Size s : params.getSupportedPreviewSizes())
+            Log.i(TAG, "" + s.width + "x" + s.height);
+        //params.setPreviewSize(1080, 1920);
+        //camera.setParameters(params);
+        tagView.setCamera(camera);
     }
 }
