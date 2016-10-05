@@ -68,6 +68,9 @@ public class CameraActivity extends AppCompatActivity {
             return;
         }
         //camera.setDisplayOrientation(90);
+        Camera.CameraInfo info = new Camera.CameraInfo();
+        Camera.getCameraInfo(0, info);
+        Log.i(TAG, "camera rotation: " + info.orientation);
         Camera.Parameters params = camera.getParameters();
         for (Camera.Size s : params.getSupportedPreviewSizes())
             Log.i(TAG, "" + s.width + "x" + s.height);

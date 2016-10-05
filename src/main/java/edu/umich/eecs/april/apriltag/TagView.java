@@ -1,11 +1,7 @@
 package edu.umich.eecs.april.apriltag;
 
 import android.content.Context;
-import android.graphics.Canvas;
-import android.graphics.Color;
-import android.graphics.Paint;
 import android.graphics.PixelFormat;
-import android.graphics.PorterDuff;
 import android.graphics.SurfaceTexture;
 import android.hardware.Camera;
 import android.opengl.GLES11Ext;
@@ -31,9 +27,11 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
     private static final String TAG = "AprilTag";
     private Camera camera;
     private Camera.Size size;
-    private ByteBuffer bb;
+    private ByteBuffer yuvBuffer;
     private SurfaceTexture st = new SurfaceTexture(0);
     private SurfaceHolder overlay;
+    private Renderer renderer;
+    private ArrayList<ApriltagDetection> detections;
 
     public TagView(Context context, SurfaceHolder overlay) {
         super(context);
@@ -43,18 +41,9 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
 
         // Use OpenGL 2.0
         setEGLContextClientVersion(2);
-        setRenderer(new TagView.Renderer());
+        renderer = new TagView.Renderer();
+        setRenderer(renderer);
         setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY);
-    }
-
-    static FloatBuffer createFloatBuffer(float[] coords) {
-        // Allocate a direct ByteBuffer, using 4 bytes per float, and copy coords into it.
-        ByteBuffer bb = ByteBuffer.allocateDirect(coords.length * 4);
-        bb.order(ByteOrder.nativeOrder());
-        FloatBuffer fb = bb.asFloatBuffer();
-        fb.put(coords);
-        fb.position(0);
-        return fb;
     }
 
     static int loadShader(int type, String shaderCode){
@@ -81,51 +70,40 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
         }
     }
 
-    /**
-     * OpenGL rendering was heavily based on example code from Grafika, especially:
-     * https://github.com/google/grafika/blob/master/src/com/android/grafika/gles/Texture2dProgram.java
-     * https://github.com/google/grafika/blob/master/src/com/android/grafika/gles/Drawable2d.java
-     */
-    class Renderer implements GLSurfaceView.Renderer {
+    static class YUVTextureProgram {
         private static final String vertexShaderCode =
                 "uniform mat4 uMVPMatrix;\n" +
-                "attribute vec4 aPosition;\n" +
-                "attribute vec4 aTextureCoord;\n" +
-                "varying vec2 vTextureCoord;\n" +
-                "void main() {\n" +
-                "    gl_Position = uMVPMatrix * aPosition;\n" +
-                "    vTextureCoord = aTextureCoord.xy;\n" +
-                "}\n";
+                        "attribute vec4 aPosition;\n" +
+                        "attribute vec2 aTextureCoord;\n" +
+                        "varying vec2 vTextureCoord;\n" +
+                        "void main() {\n" +
+                        "    gl_Position = uMVPMatrix * aPosition;\n" +
+                        "    vTextureCoord = aTextureCoord;\n" +
+                        "}\n";
 
         private static final String fragmentShaderCode =
-                //"#extension GL_OES_EGL_image_external : require\n" +
                 "precision mediump float;\n" +
-                "varying vec2 vTextureCoord;\n" +
-                "uniform sampler2D yTexture;\n" +
-                "void main() {\n" +
-                "    gl_FragColor = texture2D(yTexture, vTextureCoord);\n" +
-                "}\n";
+                        "varying vec2 vTextureCoord;\n" +
+                        "uniform sampler2D yTexture;\n" +
+                        "void main() {\n" +
+                        "    gl_FragColor = texture2D(yTexture, vTextureCoord);\n" +
+                        "}\n";
 
-        // TODO This is terrible
-        private final float rectCoords[] = {
-//                -1.0f, -1.0f,   // 0 bottom left
-//                1.0f, -1.0f,   // 1 bottom right
-//                -1.0f,  1.0f,   // 2 top left
-//                1.0f,  1.0f,   // 3 top right
-                0, 0,
-                1080, 0,
-                0, 1920,
-                1080, 1920,
+        private static final float rectCoords[] = {
+                -0.5f, -0.5f,   // 0 bottom left
+                0.5f, -0.5f,   // 1 bottom right
+                -0.5f,  0.5f,   // 2 top left
+                0.5f,  0.5f,   // 3 top right
         };
-        private final float rectTexCoords[] = {
-                0.0f, 1.0f,     // 2 top left
-                0.0f, 0.0f,     // 3 top right
+        private static final float rectTexCoords[] = {
                 1.0f, 1.0f,     // 0 bottom left
                 1.0f, 0.0f,     // 1 bottom right
+                0.0f, 1.0f,     // 2 top left
+                0.0f, 0.0f,     // 3 top right
         };
-        private final FloatBuffer rectCoordsBuf =
+        private static final FloatBuffer rectCoordsBuf =
                 createFloatBuffer(rectCoords);
-        private final FloatBuffer rectCoordsTexBuf =
+        private static final FloatBuffer rectCoordsTexBuf =
                 createFloatBuffer(rectTexCoords);
 
         int programId;
@@ -136,18 +114,17 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
         int uMVPMatrixLoc;
         int yTextureLoc;
 
-        // Combined View * Model matrix
-        float[] VM = new float[16];
-        float[] P = new float[16];
-        float[] PVM = new float[16];
-
-        public Renderer() {
-            Matrix.setIdentityM(VM, 0);
+        static FloatBuffer createFloatBuffer(float[] coords) {
+            // Allocate a direct ByteBuffer, using 4 bytes per float, and copy coords into it.
+            ByteBuffer bb = ByteBuffer.allocateDirect(coords.length * 4);
+            bb.order(ByteOrder.nativeOrder());
+            FloatBuffer fb = bb.asFloatBuffer();
+            fb.put(coords);
+            fb.position(0);
+            return fb;
         }
 
-        public void onSurfaceCreated(GL10 gl, EGLConfig config) {
-            //Log.i(TAG, "surface created");
-
+        public YUVTextureProgram() {
             // Compile the shader code into a GL program
             int vid = loadShader(GLES20.GL_VERTEX_SHADER, vertexShaderCode);
             int fid = loadShader(GLES20.GL_FRAGMENT_SHADER, fragmentShaderCode);
@@ -193,32 +170,13 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
             checkGlError("get uMVPMatrix");
             yTextureLoc = GLES20.glGetUniformLocation(programId, "yTexture");
             checkGlError("get yTexture");
-
-            // Set the background frame color
-            GLES20.glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
         }
 
-        public void onSurfaceChanged(GL10 gl, int width, int height) {
-            Log.i(TAG, "surface changed: " + width + "x" + height);
-
-            GLES20.glViewport(0, 0, width, height);
-            Matrix.orthoM(P, 0, 0, width, height, 0, -1, 1);
-        }
-
-        public void onDrawFrame(GL10 gl) {
-            //Log.i(TAG, "draw frame");
-
-            // Redraw background color
-            GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
-
-            if (camera == null)
-                return;
+        public void draw(float[] PVM, ByteBuffer yuvBuffer, int width, int height) {
 
             GLES20.glUseProgram(programId);
             checkGlError("glUseProgram");
 
-            // Set MVP matrix
-            Matrix.multiplyMM(PVM, 0, P, 0, VM, 0);
             GLES20.glUniformMatrix4fv(uMVPMatrixLoc, 1, false, PVM, 0);
             checkGlError("glUniformMatrix4fv");
 
@@ -227,9 +185,9 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
             checkGlError("glActiveTexture");
             GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureId);
             checkGlError("glBindTexture");
-            bb.position(0);
-            GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES20.GL_LUMINANCE, size.width,
-                    size.height, 0, GLES20.GL_LUMINANCE, GLES20.GL_UNSIGNED_BYTE, bb);
+            yuvBuffer.position(0);
+            GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES20.GL_LUMINANCE, width,
+                    height, 0, GLES20.GL_LUMINANCE, GLES20.GL_UNSIGNED_BYTE, yuvBuffer);
             checkGlError("glTexImage2D");
             GLES20.glUniform1i(yTextureLoc, 0);
 
@@ -247,9 +205,168 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
             GLES20.glDisableVertexAttribArray(aTextureCoordLoc);
             GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, 0);
             GLES20.glUseProgram(0);
+        }
+    }
+
+    static class LinesProgram {
+        private static final String vertexShaderCode =
+                "uniform mat4 uMVPMatrix;\n" +
+                "attribute vec4 aPosition;\n" +
+                "void main() {\n" +
+                "    gl_Position = uMVPMatrix * aPosition;\n" +
+                "}\n";
+
+        private static final String fragmentShaderCode =
+                "precision mediump float;\n" +
+                "uniform vec4 uColor;\n" +
+                "void main() {\n" +
+                "    gl_FragColor = uColor;\n" +
+                "}\n";
+
+        private FloatBuffer buffer;
+
+        int programId;
+
+        int aPositionLoc;
+        int uMVPMatrixLoc;
+        int uColorLoc;
+
+        public LinesProgram() {
+            // Compile the shader code into a GL program
+            int vid = loadShader(GLES20.GL_VERTEX_SHADER, vertexShaderCode);
+            int fid = loadShader(GLES20.GL_FRAGMENT_SHADER, fragmentShaderCode);
+            programId = GLES20.glCreateProgram();
+            checkGlError("glCreateProgram");
+            GLES20.glAttachShader(programId, vid);
+            checkGlError("glAttachShader");
+            GLES20.glAttachShader(programId, fid);
+            checkGlError("glAttachShader");
+            GLES20.glLinkProgram(programId);
+            int[] linkStatus = new int[1];
+            GLES20.glGetProgramiv(programId, GLES20.GL_LINK_STATUS, linkStatus, 0);
+            if (linkStatus[0] != GLES20.GL_TRUE) {
+                Log.e(TAG, "Could not link program: ");
+                Log.e(TAG, GLES20.glGetProgramInfoLog(programId));
+                GLES20.glDeleteProgram(programId);
+            }
+
+            // Get handles to attributes and uniforms
+            aPositionLoc = GLES20.glGetAttribLocation(programId, "aPosition");
+            checkGlError("get aPosition");
+            uMVPMatrixLoc = GLES20.glGetUniformLocation(programId, "uMVPMatrix");
+            checkGlError("get uMVPMatrix");
+            uColorLoc = GLES20.glGetUniformLocation(programId, "uColor");
+            checkGlError("get uColor");
+        }
+
+        // points = [x0 y0 x1 y1 ...]
+        // npoints = number of xy pairs in points (e.g. points is expected to have
+        //           a length of at least 2*npoints)
+        public void draw(float[] PVM, float[] points, int npoints, float[] rgba, int type) {
+            // Reuse points buffer if possible
+            if (buffer == null || 2*npoints > buffer.capacity()) {
+                int nbytes = 4 * 2*npoints;
+                ByteBuffer bb = ByteBuffer.allocateDirect(nbytes);
+                bb.order(ByteOrder.nativeOrder());
+                buffer = bb.asFloatBuffer();
+            }
+            buffer.position(0);
+            buffer.put(points, 0, 2*npoints);
+            buffer.position(0);
+
+            GLES20.glUseProgram(programId);
+            checkGlError("glUseProgram");
+
+            GLES20.glUniformMatrix4fv(uMVPMatrixLoc, 1, false, PVM, 0);
+            checkGlError("glUniformMatrix4fv");
+
+            GLES20.glUniform4fv(uColorLoc, 1, rgba, 0);
+            checkGlError("glUniform4fv");
+
+            // Render frame
+            GLES20.glEnableVertexAttribArray(aPositionLoc);
+            GLES20.glVertexAttribPointer(aPositionLoc, 2,
+                    GLES20.GL_FLOAT, false, 8, buffer);
+
+            GLES20.glLineWidth(4.0f);
+            GLES20.glDrawArrays(type, 0, npoints);
+
+            GLES20.glDisableVertexAttribArray(aPositionLoc);
+            GLES20.glUseProgram(0);
+        }
+    }
+
+    static float[] COLOR_RED = new float[] {1.0f, 0.0f, 0.0f, 1.0f};
+    static float[] COLOR_GREEN = new float[] {0.0f, 1.0f, 0.0f, 1.0f};
+    static float[] COLOR_BLUE = new float[] {0.0f, 0.0f, 1.0f, 1.0f};
+
+    /**
+     * OpenGL rendering was heavily based on example code from Grafika, especially:
+     * https://github.com/google/grafika/blob/master/src/com/android/grafika/gles/Texture2dProgram.java
+     * https://github.com/google/grafika/blob/master/src/com/android/grafika/gles/Drawable2d.java
+     */
+    class Renderer implements GLSurfaceView.Renderer {
+        // Projection * View * Model matrix
+        float[] M = new float[16];
+        float[] V = new float[16];
+        float[] P = new float[16];
+        float[] PVM = new float[16];
+
+        YUVTextureProgram tp;
+        LinesProgram lp;
+
+        public Renderer() {
+            Matrix.setIdentityM(M, 0);
+        }
+
+        public void onSurfaceCreated(GL10 gl, EGLConfig config) {
+            //Log.i(TAG, "surface created");
+            tp = new YUVTextureProgram();
+            lp = new LinesProgram();
+
+            // Set the background frame color
+            GLES20.glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
+        }
+
+        public void onSurfaceChanged(GL10 gl, int width, int height) {
+            Log.i(TAG, "surface changed: " + width + "x" + height);
+
+            GLES20.glViewport(0, 0, width, height);
+            Matrix.setIdentityM(V, 0);
+            Matrix.translateM(V, 0, width/2.0f, height/2.0f, 0);
+            Matrix.orthoM(P, 0, 0, width, 0, height, -1, 1);
+        }
+
+        public void onDrawFrame(GL10 gl) {
+            //Log.i(TAG, "draw frame");
+
+            // Redraw background color
+            GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
+
+            if (camera == null)
+                return;
+
+            // Set MVP matrix
+            Matrix.multiplyMM(PVM, 0, V, 0, M, 0);
+            Matrix.multiplyMM(PVM, 0, P, 0, PVM, 0);
+
+            tp.draw(PVM, yuvBuffer, size.width, size.height);
+
+            if (detections != null) {
+                float[] points = new float[8];
+                for (ApriltagDetection det : detections) {
+                    for (int i = 0; i < 4; i += 1) {
+                        double x = 0.5 - (det.p[2*i + 1] / size.height);
+                        double y = 0.5 - (det.p[2*i + 0] / size.width);
+                        points[2*i + 0] = (float)x;
+                        points[2*i + 1] = (float)y;
+                    }
+                    lp.draw(PVM, points, 4, COLOR_BLUE, GLES20.GL_LINE_LOOP);
+                }
+            }
 
             // Release the callback buffer
-            camera.addCallbackBuffer(bb.array());
+            camera.addCallbackBuffer(yuvBuffer.array());
         }
     }
 
@@ -272,13 +389,18 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
             size = camera.getParameters().getPreviewSize();
             Log.i(TAG, "camera preview size: " + size.width + "x" + size.height);
             int nbytes = size.width * size.height * 3 / 2;
-            if (bb == null || bb.capacity() < nbytes) {
+            if (yuvBuffer == null || yuvBuffer.capacity() < nbytes) {
                 // Allocate direct byte buffer so native code access won't require a copy
                 Log.i(TAG, "Allocating buf of size " + nbytes);
-                bb = ByteBuffer.allocateDirect(nbytes);
+                yuvBuffer = ByteBuffer.allocateDirect(nbytes);
             }
 
-            camera.addCallbackBuffer(bb.array());
+            // Scale the rectangle on which the image texture is drawn
+            // Here, the image is displayed without rescaling
+            Matrix.setIdentityM(renderer.M, 0);
+            Matrix.scaleM(renderer.M, 0, size.height, size.width, 1.0f);
+
+            camera.addCallbackBuffer(yuvBuffer.array());
             try {
                 // Give the camera an off-screen GL texture to render on
                 camera.setPreviewTexture(st);
@@ -305,15 +427,14 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
 
         // Pass bytes to apriltag via JNI, get detections back
         //long start = System.currentTimeMillis();
-        ArrayList<ApriltagDetection> detections =
-                ApriltagNative.apriltag_detect_yuv(bytes, size.width, size.height);
+        detections = ApriltagNative.apriltag_detect_yuv(bytes, size.width, size.height);
         //long diff = System.currentTimeMillis() - start;
         //Log.i(TAG, "tag detections took " + diff + " ms");
 
         // Render YUV image in OpenGL
         requestRender();
 
-        //*
+        /*
         // Render detections
         // TODO do this in OpenGL so frames are synced up properly
         Canvas canvas = overlay.lockCanvas();
