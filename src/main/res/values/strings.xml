@@ -1,3 +1,80 @@
 <resources>
     <string name="app_name">AprilTag</string>
+    <string name="app_name_banner">APRIL Tag Detector\nv. 0.1 (Unreleased Alpha)</string>
+    <string name="icon">apriltag.png</string>
+
+    <string name="help">Help</string>
+    <string name="settings">Settings</string>
+    <string name="about">About</string>
+    <string name="screenshot">Screenshot</string>
+    <string name="reset">Reset Settings</string>
+    <string name="title_activity_settings">Settings</string>
+
+
+    <!-- Strings related to Settings -->
+
+    <!-- Example General settings -->
+    <string name="pref_header_apriltag">AprilTag Processing Options</string>
+
+    <string name="pref_title_refine_edges">Enable refine edges</string>
+    <string name="pref_description_refine_edges">Refines edges for better estimates at the cost of computation time</string>
+
+    <string name="pref_title_refine_decode">Enable refine decode</string>
+    <string name="pref_description_refine_decode">Refines decoding</string>
+
+    <string name="pref_title_refine_pose">Enable refine pose</string>
+    <string name="pref_description_refine_pose">Refines poses</string>
+
+    <string name="pref_title_decimation">Decimation</string>
+    <string name="pref_default_decimation">2.0</string>
+
+    <string name="pref_title_sigma">Sigma</string>
+    <string name="pref_default_sigma">0.0</string>
+
+    <string name="pref_title_nthreads">Number of threads</string>
+    <string name="pref_default_nthreads">1</string>
+
+    <string name="pref_title_tag_family">Tag family</string>
+    <string-array name="pref_tag_family_list_titles">
+        <item>tag36h11 (recommended)</item>
+        <item>tag36h10</item>
+        <item>tag25h9</item>
+        <item>tag25h7</item>
+        <item>tag16h5</item>
+    </string-array>
+    <string-array name="pref_tag_family_list_values">
+        <item>3611</item>
+        <item>3610</item>
+        <item>259</item>
+        <item>257</item>
+        <item>165</item>
+    </string-array>
+
+    <!-- Example settings for Data & Sync -->
+    <string name="pref_header_data_sync">Data &amp; sync</string>
+
+    <string name="pref_title_sync_frequency">Sync frequency</string>
+    <string-array name="pref_sync_frequency_titles">
+        <item>15 minutes</item>
+        <item>30 minutes</item>
+        <item>1 hour</item>
+        <item>3 hours</item>
+        <item>6 hours</item>
+        <item>Never</item>
+    </string-array>
+    <string-array name="pref_sync_frequency_values">
+        <item>15</item>
+        <item>30</item>
+        <item>60</item>
+        <item>180</item>
+        <item>360</item>
+        <item>-1</item>
+    </string-array>
+
+    <string name="pref_title_system_sync_settings">System sync settings</string>
+
+    <!-- Example settings for Notifications -->
+    <string name="pref_header_device">Device Settings</string>
+
+    <string name="pref_title_camera">Use rear camera</string>
 </resources>
