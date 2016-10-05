@@ -24,9 +24,10 @@ import javax.microedition.khronos.opengles.GL10;
  */
 public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
     private Camera camera;
-    private byte[] buf;
+    private Camera.Size size;
+    private ByteBuffer bb;
     private Bitmap bm;
-    private SurfaceTexture st;
+    private SurfaceTexture st = new SurfaceTexture(0);
 
     public TagView(Context context) {
         super(context);
@@ -34,7 +35,7 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
         // Use OpenGL 2.0
         setEGLContextClientVersion(2);
         setRenderer(new TagView.Renderer());
-        //setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY);
+        setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY);
 
         // deprecated setting, but required on Android versions prior to 3.0
         //getHolder().setType(SurfaceHolder.SURFACE_TYPE_PUSH_BUFFERS);
@@ -91,12 +92,12 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
                 "}\n";
 
         private static final String fragmentShaderCode =
-                "#extension GL_OES_EGL_image_external : require\n" +
+                //"#extension GL_OES_EGL_image_external : require\n" +
                 "precision mediump float;\n" +
                 "varying vec2 vTextureCoord;\n" +
-                "uniform samplerExternalOES sTexture;\n" +
+                "uniform sampler2D yTexture;\n" +
                 "void main() {\n" +
-                "    gl_FragColor = texture2D(sTexture, vTextureCoord);\n" +
+                "    gl_FragColor = texture2D(yTexture, vTextureCoord);\n" +
                 "}\n";
 
         private final float rectCoords[] = {
@@ -106,10 +107,10 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
                 1.0f,  1.0f,   // 3 top right
         };
         private final float rectTexCoords[] = {
-                0.0f, 0.0f,     // 0 bottom left
+                1.0f, 1.0f,     // 3 top right
                 1.0f, 0.0f,     // 1 bottom right
                 0.0f, 1.0f,     // 2 top left
-                1.0f, 1.0f      // 3 top right
+                0.0f, 0.0f,     // 0 bottom left
         };
         private final FloatBuffer rectCoordsBuf =
                 createFloatBuffer(rectCoords);
@@ -118,11 +119,11 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
 
         int programId;
         int textureId;
-        SurfaceTexture texture;
 
         int aPositionLoc;
         int aTextureCoordLoc;
         int uMVPMatrixLoc;
+        int yTextureLoc;
 
         // Combined View * Model matrix
         float[] VM = new float[16];
@@ -134,7 +135,7 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
         }
 
         public void onSurfaceCreated(GL10 gl, EGLConfig config) {
-            Log.i("TagView", "surface created");
+            //Log.i("TagView", "surface created");
 
             // Compile the shader code into a GL program
             int vid = loadShader(GLES20.GL_VERTEX_SHADER, vertexShaderCode);
@@ -156,28 +157,21 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
 
             // Create a texture
             int[] tid = new int[1];
+            GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
             GLES20.glGenTextures(1, tid, 0);
             checkGlError("glGenTextures");
-            GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, tid[0]);
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, tid[0]);
             checkGlError("glBindTexture");
 
-            GLES20.glTexParameterf(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_MIN_FILTER,
+            GLES20.glTexParameterf(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER,
                     GLES20.GL_NEAREST);
-            GLES20.glTexParameterf(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_MAG_FILTER,
+            GLES20.glTexParameterf(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER,
                     GLES20.GL_LINEAR);
-            GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_WRAP_S,
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S,
                     GLES20.GL_CLAMP_TO_EDGE);
-            GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_WRAP_T,
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T,
                     GLES20.GL_CLAMP_TO_EDGE);
             textureId = tid[0];
-            texture = new SurfaceTexture(textureId);
-            if (camera != null) {
-                try {
-                    camera.setPreviewTexture(texture);
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
 
             // Get handles to attributes and uniforms
             aPositionLoc = GLES20.glGetAttribLocation(programId, "aPosition");
@@ -186,21 +180,26 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
             checkGlError("get aTextureCoord");
             uMVPMatrixLoc = GLES20.glGetUniformLocation(programId, "uMVPMatrix");
             checkGlError("get uMVPMatrix");
+            yTextureLoc = GLES20.glGetUniformLocation(programId, "yTexture");
+            checkGlError("get yTexture");
 
             // Set the background frame color
-            //GLES20.glClearColor(0.0f, 0.3f, 0.5f, 1.0f);
+            GLES20.glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
         }
 
         public void onSurfaceChanged(GL10 gl, int width, int height) {
-            Log.i("TagView", "surface changed");
+            //Log.i("TagView", "surface changed");
             GLES20.glViewport(0, 0, width, height);
-            Matrix.orthoM(P, 0, 0, width, 0, height, -1, 1);
+            Matrix.orthoM(P, 0, -1, 1, -1, 1, -1, 1);
         }
 
         public void onDrawFrame(GL10 gl) {
-            Log.i("TagView", "draw frame");
+            //Log.i("TagView", "draw frame");
             // Redraw background color
-            //GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
+            GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
+
+            if (camera == null)
+                return;
 
             GLES20.glUseProgram(programId);
             checkGlError("glUseProgram");
@@ -213,8 +212,13 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
             // Render frame
             GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
             checkGlError("glActiveTexture");
-            GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, textureId);
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureId);
             checkGlError("glBindTexture");
+            bb.position(0);
+            GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES20.GL_LUMINANCE, size.width,
+                    size.height, 0, GLES20.GL_LUMINANCE, GLES20.GL_UNSIGNED_BYTE, bb);
+            checkGlError("glTexImage2D");
+            GLES20.glUniform1i(yTextureLoc, 0);
 
             GLES20.glEnableVertexAttribArray(aPositionLoc);
             GLES20.glVertexAttribPointer(aPositionLoc, 2,
@@ -230,6 +234,9 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
             GLES20.glDisableVertexAttribArray(aTextureCoordLoc);
             GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, 0);
             GLES20.glUseProgram(0);
+
+            // Release the callback buffer
+            camera.addCallbackBuffer(bb.array());
         }
     }
 
@@ -250,28 +257,29 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
         // Start the new camera preview
         if (camera != null) {
             // Ensure space for frame (12 bits per pixel)
-            Camera.Size size = camera.getParameters().getPreviewSize();
+            size = camera.getParameters().getPreviewSize();
             int nbytes = size.width * size.height * 3 / 2;
-            if (buf == null || buf.length < nbytes) {
+            if (bb == null || bb.capacity() < nbytes) {
                 // Allocate direct byte buffer so native code access won't require a copy
                 Log.i("TagView", "Allocating buf of size " + nbytes);
-                buf = ByteBuffer.allocateDirect(nbytes).array();
+                bb = ByteBuffer.allocateDirect(nbytes);
                 bm = Bitmap.createBitmap(size.height, size.width, Bitmap.Config.ARGB_8888);
             }
 
-            //camera.addCallbackBuffer(buf);
-//            try {
-//                // Give the camera an off-screen GL texture to render on
-//                camera.setPreviewTexture(st);
-//            } catch (IOException e) {
-//                Log.d("TagView", "Couldn't set preview display");
-//                return;
-//            }
-            //camera.setPreviewCallbackWithBuffer(this);
+            camera.addCallbackBuffer(bb.array());
+            try {
+                // Give the camera an off-screen GL texture to render on
+                camera.setPreviewTexture(st);
+            } catch (IOException e) {
+                Log.d("TagView", "Couldn't set preview display");
+                return;
+            }
+            camera.setPreviewCallbackWithBuffer(this);
             camera.startPreview();
             //Log.i("TagView", "Camera start");
         }
         this.camera = camera;
+
     }
 
     int frameCount;
@@ -284,8 +292,6 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
         if (this.camera == null)
             return;
 
-        Camera.Size size = camera.getParameters().getPreviewSize();
-
         // Pass bytes to apriltag via JNI, get detections back
         ArrayList<ApriltagDetection> detections =
                 ApriltagNative.apriltag_detect_yuv(bytes, size.width, size.height);
@@ -295,7 +301,7 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
         requestRender();
 
         // Release the callback buffer
-        camera.addCallbackBuffer(bytes);
+        //camera.addCallbackBuffer(bytes);
 
         /*
         // Render some results (this is just a placeholder)
