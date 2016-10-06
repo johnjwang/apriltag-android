@@ -1,0 +1,87 @@
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <PreferenceCategory
+        android:title="AprilTag Processing"
+        android:key="pref_cat_processing">
+    <!--
+<SwitchPreference
+    android:visibility="invisible"
+    android:defaultValue="false"
+    android:key="refine_edges_switch"
+    android:summary="@string/pref_description_refine_edges"
+    android:title="@string/pref_title_refine_edges" />
+
+<SwitchPreference
+    android:visibility="gone"
+    android:defaultValue="false"
+    android:key="refine_decode_switch"
+    android:summary="@string/pref_description_refine_decode"
+    android:title="@string/pref_title_refine_decode" />
+
+<SwitchPreference
+    android:visibility="gone"
+    android:defaultValue="false"
+    android:key="refine_pose_switch"
+    android:summary="@string/pref_description_refine_pose"
+    android:title="@string/pref_title_refine_pose" />
+    -->
+
+        <EditTextPreference
+            android:defaultValue="@string/pref_default_decimation"
+            android:inputType="numberDecimal"
+            android:key="decimation_value"
+            android:maxLines="1"
+            android:selectAllOnFocus="true"
+            android:singleLine="true"
+            android:title="@string/pref_title_decimation"/>
+
+        <EditTextPreference
+            android:defaultValue="@string/pref_default_sigma"
+            android:inputType="numberDecimal"
+            android:key="sigma_value"
+            android:maxLines="1"
+            android:selectAllOnFocus="true"
+            android:singleLine="true"
+            android:title="@string/pref_title_sigma"/>
+
+        <EditTextPreference
+            android:defaultValue="@string/pref_default_nthreads"
+            android:inputType="number"
+            android:key="nthreads_value"
+            android:maxLines="1"
+            android:selectAllOnFocus="true"
+            android:singleLine="true"
+            android:title="@string/pref_title_nthreads"/>
+
+        <ListPreference
+            android:defaultValue="tag36h11"
+            android:entries="@array/pref_tag_family_list_titles"
+            android:entryValues="@array/pref_tag_family_list_values"
+            android:key="tag_family_list"
+            android:negativeButtonText="@null"
+            android:positiveButtonText="@null"
+            android:title="@string/pref_title_tag_family" />
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:title="Camera Settings"
+        android:key="pref_cat_camera">
+
+        <SwitchPreference
+            android:defaultValue="true"
+            android:key="device_settings_rear_camera"
+            android:title="@string/pref_title_camera" />
+
+        <ListPreference
+            android:id="@+id/camera_resolution"
+            android:defaultValue="1080"
+            android:entries="@array/pref_camera_resolution_titles"
+            android:entryValues="@array/pref_camera_resolution_values"
+            android:key="camera_resolution"
+            android:negativeButtonText="@null"
+            android:positiveButtonText="@null"
+            android:title="@string/pref_title_camera_resolution" />
+
+    </PreferenceCategory>
+
+</PreferenceScreen>

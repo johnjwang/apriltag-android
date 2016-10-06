@@ -12,7 +12,14 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.MenuInflater;
 import android.view.SurfaceView;
+import android.view.View;
+import android.widget.ArrayAdapter;
 import android.widget.FrameLayout;
+import android.widget.HeaderViewListAdapter;
+import android.widget.ListAdapter;
+import android.widget.ListView;
+
+import java.util.ArrayList;
 
 /**
  * An example full-screen activity that shows and hides the system UI (i.e.
@@ -72,7 +79,7 @@ public class CameraActivity extends AppCompatActivity {
             PreferenceManager.getDefaultSharedPreferences(this).edit().putString("nthreads_value", Integer.toString(nproc)).apply();
             nthreads = nproc;
         }
-        String tagFamily = sharedPreferences.getString("tag_family_list", "tag36h11");
+        String tagFamily = sharedPreferences.getString("tag_family_list", "tag36h11"); 
         boolean useRear = sharedPreferences.getBoolean("device_settings_rear_camera", true);
         Log.i(TAG, String.format("decimation: %f | sigma: %f | nthreads: %d | tagFamily: %s | useRear: %b",
                 decimation, sigma, nthreads, tagFamily, useRear));
@@ -102,10 +109,19 @@ public class CameraActivity extends AppCompatActivity {
             return;
         }
 
+
+        /*
+        ListView list = (ListView) findViewById(R.id.camera_resolution);
+        ArrayList<String> arrayList = new ArrayList<>();
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(getApplicationContext(), R.layout.main, arrayList);
+        list.setAdapter(adapter);
+        // TODO: Add these supported resolutions to the listview, above code doesn't quite work
+        */
         Log.i(TAG, "supported resolutions:");
         Camera.Parameters params = camera.getParameters();
-        for (Camera.Size s : params.getSupportedPreviewSizes())
+        for (Camera.Size s : params.getSupportedPreviewSizes()) {
             Log.i(TAG, " " + s.width + "x" + s.height);
+        }
 
         tagView.setCamera(camera);
     }
@@ -128,7 +144,6 @@ public class CameraActivity extends AppCompatActivity {
                 return true;
 
             case R.id.reset:
-                // TODO this doesn't work yet, but suggest getting rid of this option too
                 // Reset all shared preferences to default values
                 PreferenceManager.getDefaultSharedPreferences(this).edit().clear().commit();
                 return true;

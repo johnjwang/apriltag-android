@@ -12,8 +12,6 @@
 
 
     <!-- Strings related to Settings -->
-
-    <!-- Example General settings -->
     <string name="pref_header_apriltag">AprilTag Processing Options</string>
 
     <string name="pref_title_refine_edges">Enable refine edges</string>
@@ -50,31 +48,16 @@
         <item>tag16h5</item>
     </string-array>
 
-    <!-- Example settings for Data & Sync -->
-    <string name="pref_header_data_sync">Data &amp; sync</string>
-
-    <string name="pref_title_sync_frequency">Sync frequency</string>
-    <string-array name="pref_sync_frequency_titles">
-        <item>15 minutes</item>
-        <item>30 minutes</item>
-        <item>1 hour</item>
-        <item>3 hours</item>
-        <item>6 hours</item>
-        <item>Never</item>
-    </string-array>
-    <string-array name="pref_sync_frequency_values">
-        <item>15</item>
-        <item>30</item>
-        <item>60</item>
-        <item>180</item>
-        <item>360</item>
-        <item>-1</item>
-    </string-array>
-
-    <string name="pref_title_system_sync_settings">System sync settings</string>
-
-    <!-- Example settings for Notifications -->
-    <string name="pref_header_device">Device Settings</string>
-
     <string name="pref_title_camera">Use rear camera</string>
+
+    <string name="pref_title_camera_resolution">Camera resolution</string>
+    <string-array name="pref_camera_resolution_titles">
+        <item>1920 x 1080</item>
+        <item>720 x 480</item>
+    </string-array>
+    <string-array name="pref_camera_resolution_values">
+        <item>1080</item>
+        <item>480</item>
+    </string-array>
+
 </resources>
