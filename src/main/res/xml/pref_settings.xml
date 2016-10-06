@@ -1,4 +1,4 @@
-<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android" >
 
     <PreferenceCategory
         android:title="AprilTag Processing"
@@ -83,5 +83,15 @@
             android:title="@string/pref_title_camera_resolution" />
 
     </PreferenceCategory>
+
+    <!--
+    <PreferenceCategory
+        android:title="Other">
+
+        // Reset settings
+        // Toggle light/dark theme
+
+    </PreferenceCategory>
+    -->
 
 </PreferenceScreen>

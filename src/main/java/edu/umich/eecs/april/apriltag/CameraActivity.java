@@ -42,7 +42,7 @@ public class CameraActivity extends AppCompatActivity {
         layout.addView(tagView);
 
         // Add toolbar/actionbar
-        Toolbar myToolbar = (Toolbar) findViewById(R.id.my_toolbar);
+        Toolbar myToolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(myToolbar);
     }
 
@@ -79,7 +79,7 @@ public class CameraActivity extends AppCompatActivity {
             PreferenceManager.getDefaultSharedPreferences(this).edit().putString("nthreads_value", Integer.toString(nproc)).apply();
             nthreads = nproc;
         }
-        String tagFamily = sharedPreferences.getString("tag_family_list", "tag36h11"); 
+        String tagFamily = sharedPreferences.getString("tag_family_list", "tag36h11");
         boolean useRear = sharedPreferences.getBoolean("device_settings_rear_camera", true);
         Log.i(TAG, String.format("decimation: %f | sigma: %f | nthreads: %d | tagFamily: %s | useRear: %b",
                 decimation, sigma, nthreads, tagFamily, useRear));
