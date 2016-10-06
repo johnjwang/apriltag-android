@@ -44,7 +44,7 @@ public class CameraActivity extends AppCompatActivity {
         super.onPause();
         tagView.onPause();
 
-        //Log.i("CameraActivity", "Pause");
+        //Log.i(TAG, "Pause");
         // TODO move camera management to TagView class
 
         if (camera != null) {
@@ -59,23 +59,51 @@ public class CameraActivity extends AppCompatActivity {
         super.onResume();
         tagView.onResume();
 
-        //Log.i("CameraActivity", "Resume");
+        //Log.i(TAG, "Resume");
+
+        int nproc = Runtime.getRuntime().availableProcessors();
+        Log.i(TAG, "available processors: " + nproc);
+
+        // Re-initialize the Apriltag detector as settings may have changed
+        SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
+        double decimation = Double.parseDouble(sharedPreferences.getString("decimation_value", "2"));
+        double sigma = Double.parseDouble(sharedPreferences.getString("sigma_value", "0"));
+        int nthreads = Integer.parseInt(sharedPreferences.getString("nthreads_value", "1"));
+        String tagFamily = sharedPreferences.getString("tag_family_list", "tag36h11");
+        boolean useRear = sharedPreferences.getBoolean("device_settings_rear_camera", true);
+        Log.i(TAG, String.format("decimation: %f | sigma: %f | nthreads: %d | tagFamily: %s | useRear: %b",
+                decimation, sigma, nthreads, tagFamily, useRear));
+        ApriltagNative.apriltag_init(tagFamily, 2, decimation, sigma, nthreads);
+
+        // Find the camera index of front or rear camera
+        int camidx = 0;
+        Camera.CameraInfo info = new Camera.CameraInfo();
+        for (int i = 0; i < Camera.getNumberOfCameras(); i += 1) {
+            Camera.getCameraInfo(i, info);
+            int desiredOrientation = useRear ? Camera.CameraInfo.CAMERA_FACING_BACK :
+                    Camera.CameraInfo.CAMERA_FACING_FRONT;
+            if (info.orientation == desiredOrientation) {
+                camidx = i;
+                break;
+            }
+        }
+
+        Camera.getCameraInfo(camidx, info);
+        Log.i(TAG, "using camera " + camidx);
+        Log.i(TAG, "camera rotation: " + info.orientation);
 
         try {
             camera = Camera.open();
         } catch (Exception e) {
-            Log.d("CameraActivity", "Couldn't open camera: " + e.getMessage());
+            Log.d(TAG, "Couldn't open camera: " + e.getMessage());
             return;
         }
-        //camera.setDisplayOrientation(90);
-        Camera.CameraInfo info = new Camera.CameraInfo();
-        Camera.getCameraInfo(0, info);
-        Log.i(TAG, "camera rotation: " + info.orientation);
+
+        Log.i(TAG, "supported resolutions:");
         Camera.Parameters params = camera.getParameters();
         for (Camera.Size s : params.getSupportedPreviewSizes())
-            Log.i(TAG, "" + s.width + "x" + s.height);
-        //params.setPreviewSize(1080, 1920);
-        //camera.setParameters(params);
+            Log.i(TAG, " " + s.width + "x" + s.height);
+
         tagView.setCamera(camera);
     }
 
@@ -89,36 +117,15 @@ public class CameraActivity extends AppCompatActivity {
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         switch (item.getItemId()) {
-            case R.id.help:
-                return true;
 
             case R.id.settings:
                 Intent intent = new Intent();
                 intent.setClassName(this, "edu.umich.eecs.april.apriltag.SettingsActivity");
                 startActivity(intent);
-
-                // TODO: Move the below block anywhere the variables are needed
-                SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
-                boolean refine_edges = sharedPreferences.getBoolean("refine_edges_switch", false);
-                boolean refine_decode = sharedPreferences.getBoolean("refine_decode_switch", false);
-                boolean refine_pose = sharedPreferences.getBoolean("refine_pose_switch", false);
-                float decimation = Float.parseFloat(sharedPreferences.getString("decimation_value", "2"));
-                float sigma = Float.parseFloat(sharedPreferences.getString("sigma_value", "0"));
-                int nthreads = Integer.parseInt(sharedPreferences.getString("nthreads_value", "1"));
-                int tag_family = Integer.parseInt(sharedPreferences.getString("tag_family_list", "3611"));
-                Log.e("Pref", String.format("refine_edges: %s | refine_decode: %s | refine_pose: %s | decimation: %f | sigma: %f | nthreads: %d | tag_family: %d",
-                        Boolean.toString(refine_edges), Boolean.toString(refine_decode), Boolean.toString(refine_pose),
-                        decimation, sigma, nthreads, tag_family));
-                // TODO: Move the above block anywhere the variables are needed, remove the error logging
-                return true;
-
-            case R.id.about:
-                return true;
-
-            case R.id.screenshot:
                 return true;
 
             case R.id.reset:
+                // TODO this doesn't work yet, but suggest getting rid of this option too
                 // Reset all shared preferences to default values
                 PreferenceManager.getDefaultSharedPreferences(this).edit().clear().commit();
                 return true;

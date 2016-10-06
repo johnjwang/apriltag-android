@@ -381,16 +381,13 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
             // Redraw background color
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
 
-            if (camera == null)
-                return;
-
-            // Set MVP matrix
-            Matrix.multiplyMM(PVM, 0, V, 0, M, 0);
-            Matrix.multiplyMM(PVM, 0, P, 0, PVM, 0);
-
-            tp.draw(PVM, yuvBuffer, size.width, size.height);
-
             if (detections != null) {
+                // Set MVP matrix
+                Matrix.multiplyMM(PVM, 0, V, 0, M, 0);
+                Matrix.multiplyMM(PVM, 0, P, 0, PVM, 0);
+
+                tp.draw(PVM, yuvBuffer, size.width, size.height);
+
                 float[] points = new float[8];
                 for (ApriltagDetection det : detections) {
                     for (int i = 0; i < 4; i += 1) {
@@ -401,10 +398,13 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
                     }
                     lp.draw(PVM, points, 4, COLOR_BLUE, GLES20.GL_LINE_LOOP);
                 }
+
+                detections = null;
             }
 
             // Release the callback buffer
-            camera.addCallbackBuffer(yuvBuffer.array());
+            if (camera != null)
+                camera.addCallbackBuffer(yuvBuffer.array());
         }
     }
 
@@ -454,6 +454,18 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
 
     }
 
+    static class ProcessingThread extends Thread {
+        byte[] bytes;
+        int width;
+        int height;
+        TagView parent;
+
+        public void run() {
+            parent.detections = ApriltagNative.apriltag_detect_yuv(bytes, width, height);
+            parent.requestRender();
+        }
+    }
+
     private int frameCount;
     public void onPreviewFrame(byte[] bytes, Camera camera) {
         frameCount += 1;
@@ -463,14 +475,22 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
         if (this.camera == null)
             return;
 
+        // Spin up another thread so we don't block the UI thread
+        ProcessingThread thread = new ProcessingThread();
+        thread.bytes = bytes;
+        thread.width = size.width;
+        thread.height = size.height;
+        thread.parent = this;
+        thread.run();
+
         // Pass bytes to apriltag via JNI, get detections back
         //long start = System.currentTimeMillis();
-        detections = ApriltagNative.apriltag_detect_yuv(bytes, size.width, size.height);
+        //detections = ApriltagNative.apriltag_detect_yuv(bytes, size.width, size.height);
         //long diff = System.currentTimeMillis() - start;
         //Log.i(TAG, "tag detections took " + diff + " ms");
 
         // Render YUV image in OpenGL
-        requestRender();
+        //requestRender();
 
         /*
         // Render detections

@@ -43,11 +43,11 @@
         <item>tag16h5</item>
     </string-array>
     <string-array name="pref_tag_family_list_values">
-        <item>3611</item>
-        <item>3610</item>
-        <item>259</item>
-        <item>257</item>
-        <item>165</item>
+        <item>tag36h11</item>
+        <item>tag36h10</item>
+        <item>tag25h9</item>
+        <item>tag25h7</item>
+        <item>tag16h5</item>
     </string-array>
 
     <!-- Example settings for Data & Sync -->

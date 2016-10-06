@@ -13,11 +13,6 @@ public class ApriltagNative {
     static {
         System.loadLibrary("apriltag");
         native_init();
-
-        int nproc = Runtime.getRuntime().availableProcessors();
-        Log.i("ApriltagNative", "available processors = " + nproc);
-
-        apriltag_init("tag36h11", 2, 2.0, 0.0, nproc);
     }
 
     public static native void native_init();

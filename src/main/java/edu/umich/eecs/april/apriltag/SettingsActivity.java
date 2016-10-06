@@ -145,6 +145,9 @@ public class SettingsActivity extends AppCompatPreferenceActivity {
             addPreferencesFromResource(R.xml.pref_apriltag_processing);
             setHasOptionsMenu(true);
 
+            int nproc = Runtime.getRuntime().availableProcessors();
+            findPreference("nthreads_value").setDefaultValue(Integer.toString(nproc));
+
             // Bind the summaries of EditText/List/Dialog/Ringtone preferences
             // to their values. When their values change, their summaries are
             // updated to reflect the new value, per the Android Design
