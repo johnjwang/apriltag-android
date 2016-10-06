@@ -61,14 +61,17 @@ public class CameraActivity extends AppCompatActivity {
 
         //Log.i(TAG, "Resume");
 
-        int nproc = Runtime.getRuntime().availableProcessors();
-        Log.i(TAG, "available processors: " + nproc);
-
         // Re-initialize the Apriltag detector as settings may have changed
         SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
         double decimation = Double.parseDouble(sharedPreferences.getString("decimation_value", "2"));
         double sigma = Double.parseDouble(sharedPreferences.getString("sigma_value", "0"));
-        int nthreads = Integer.parseInt(sharedPreferences.getString("nthreads_value", "1"));
+        int nthreads = Integer.parseInt(sharedPreferences.getString("nthreads_value", "0"));
+        if (nthreads <= 0) {
+            int nproc = Runtime.getRuntime().availableProcessors();
+            Log.i(TAG, "available processors: " + nproc);
+            PreferenceManager.getDefaultSharedPreferences(this).edit().putString("nthreads_value", Integer.toString(nproc)).apply();
+            nthreads = nproc;
+        }
         String tagFamily = sharedPreferences.getString("tag_family_list", "tag36h11");
         boolean useRear = sharedPreferences.getBoolean("device_settings_rear_camera", true);
         Log.i(TAG, String.format("decimation: %f | sigma: %f | nthreads: %d | tagFamily: %s | useRear: %b",

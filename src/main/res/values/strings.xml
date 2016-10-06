@@ -32,7 +32,7 @@
     <string name="pref_default_sigma">0.0</string>
 
     <string name="pref_title_nthreads">Number of threads</string>
-    <string name="pref_default_nthreads">1</string>
+    <string name="pref_default_nthreads">0</string>
 
     <string name="pref_title_tag_family">Tag family</string>
     <string-array name="pref_tag_family_list_titles">
