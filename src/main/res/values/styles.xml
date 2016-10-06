@@ -6,13 +6,8 @@
         <item name="colorAccent">@color/colorAccent</item>
     </style>
 
-    <style name="PreferencesTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
-        <item name="colorPrimary">@color/colorAccent</item>
-        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
-        <item name="colorAccent">@color/colorAccent</item>
-        <item name="android:background">@color/colorPrimary</item>
-        <item name="android:textColor">#ffffff</item>
-        <item name="android:textColorSecondary">#bbbbbb</item>
+    <style name="PreferencesTheme" parent="android:ThemeOverlay.Material.Dark">
+        <item name="android:colorAccent">@color/colorAccent</item>
     </style>
 
     <style name="Widget.MyApp.Toolbar.Solid" parent="Widget.AppCompat.ActionBar">

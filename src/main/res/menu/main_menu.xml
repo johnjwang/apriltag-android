@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<menu xmlns:android="http://schemas.android.com/apk/res/android">
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
     <item android:id="@+id/settings"
-        android:icon="@mipmap/apriltag"
+        android:icon="@drawable/ic_settings_white_24dp"
+        app:showAsAction="ifRoom"
         android:title="@string/settings"/>
 <!--
     <item android:id="@+id/help"
@@ -12,5 +15,7 @@
         android:title="@string/screenshot" />
 -->
     <item android:id="@+id/reset"
+        android:icon="@drawable/ic_restore_white_24dp"
+        app:showAsAction="ifRoom"
         android:title="@string/reset" />
 </menu>

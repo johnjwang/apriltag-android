@@ -3,17 +3,28 @@
     android:layout_height="fill_parent"
     android:orientation="vertical">
 
-    <android.support.v7.widget.Toolbar
-        xmlns:android="http://schemas.android.com/apk/res/android"
-        xmlns:app="http://schemas.android.com/apk/res-auto"
-        android:id="@+id/toolbar"
+    <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:minHeight="?attr/actionBarSize"
-        android:theme="@style/ThemeOverlay.MyApp.ActionBar"
-        app:popupTheme="@style/ThemeOverlay.AppCompat.Light"
-        style="@style/Widget.MyApp.Toolbar.Solid"
-        android:elevation="4dp"/>
+        android:layout_height="wrap_content">
+        <ImageView
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:src="@mipmap/april_lab"
+            android:paddingLeft="10dp"
+            android:theme="@style/Widget.MyApp.Toolbar.Solid"/>
+        <android.support.v7.widget.Toolbar
+            xmlns:android="http://schemas.android.com/apk/res/android"
+            xmlns:app="http://schemas.android.com/apk/res-auto"
+            android:id="@+id/toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="?attr/actionBarSize"
+            android:theme="@style/ThemeOverlay.MyApp.ActionBar"
+            app:popupTheme="@style/ThemeOverlay.AppCompat.Dark"
+            style="@style/Widget.MyApp.Toolbar.Solid"
+            android:elevation="4dp"/>
+    </LinearLayout>
+
 
 <!--
     <LinearLayout

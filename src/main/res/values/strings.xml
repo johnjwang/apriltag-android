@@ -1,7 +1,5 @@
 <resources>
     <string name="app_name">AprilTag</string>
-    <string name="app_name_banner">APRIL Tag Detector\nv. 0.1 (Unreleased Alpha)</string>
-    <string name="icon">apriltag.png</string>
 
     <string name="help">Help</string>
     <string name="settings">Settings</string>
