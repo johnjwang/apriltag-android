@@ -85,8 +85,17 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
                 "precision mediump float;\n" +
                         "varying vec2 vTextureCoord;\n" +
                         "uniform sampler2D yTexture;\n" +
+                        "uniform sampler2D uvTexture;\n" +
                         "void main() {\n" +
-                        "    gl_FragColor = texture2D(yTexture, vTextureCoord);\n" +
+                        "    float y, u, v, r, g, b;\n" +
+                        "    vec2 uv = texture2D(uvTexture, vTextureCoord).ar;\n" +
+                        "    y = texture2D(yTexture, vTextureCoord).r;\n" +
+                        "    u = uv.x - 0.5;\n" +
+                        "    v = uv.y - 0.5;\n" +
+                        "    r = y + 1.370705*v;\n" +
+                        "    g = y - 0.698001*v - 0.337633*u;\n" +
+                        "    b = y + 1.732446*u;\n" +
+                        "    gl_FragColor = vec4(r, g, b, 1.0);\n" +
                         "}\n";
 
         private static final float rectCoords[] = {
@@ -107,12 +116,14 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
                 createFloatBuffer(rectTexCoords);
 
         int programId;
-        int textureId;
+        int yTextureId;
+        int uvTextureId;
 
         int aPositionLoc;
         int aTextureCoordLoc;
         int uMVPMatrixLoc;
         int yTextureLoc;
+        int uvTextureLoc;
 
         static FloatBuffer createFloatBuffer(float[] coords) {
             // Allocate a direct ByteBuffer, using 4 bytes per float, and copy coords into it.
@@ -143,11 +154,11 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
                 GLES20.glDeleteProgram(programId);
             }
 
-            // Create a texture
-            int[] tid = new int[1];
-            GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
-            GLES20.glGenTextures(1, tid, 0);
+            // Create textures
+            int[] tid = new int[2];
+            GLES20.glGenTextures(2, tid, 0);
             checkGlError("glGenTextures");
+            GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
             GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, tid[0]);
             checkGlError("glBindTexture");
 
@@ -159,7 +170,21 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
                     GLES20.GL_CLAMP_TO_EDGE);
             GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T,
                     GLES20.GL_CLAMP_TO_EDGE);
-            textureId = tid[0];
+            yTextureId = tid[0];
+
+            GLES20.glActiveTexture(GLES20.GL_TEXTURE1);
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, tid[1]);
+            checkGlError("glBindTexture");
+
+            GLES20.glTexParameterf(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER,
+                    GLES20.GL_NEAREST);
+            GLES20.glTexParameterf(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER,
+                    GLES20.GL_LINEAR);
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S,
+                    GLES20.GL_CLAMP_TO_EDGE);
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T,
+                    GLES20.GL_CLAMP_TO_EDGE);
+            uvTextureId = tid[1];
 
             // Get handles to attributes and uniforms
             aPositionLoc = GLES20.glGetAttribLocation(programId, "aPosition");
@@ -170,6 +195,8 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
             checkGlError("get uMVPMatrix");
             yTextureLoc = GLES20.glGetUniformLocation(programId, "yTexture");
             checkGlError("get yTexture");
+            uvTextureLoc = GLES20.glGetUniformLocation(programId, "uvTexture");
+            checkGlError("get uvTexture");
         }
 
         public void draw(float[] PVM, ByteBuffer yuvBuffer, int width, int height) {
@@ -180,16 +207,27 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
             GLES20.glUniformMatrix4fv(uMVPMatrixLoc, 1, false, PVM, 0);
             checkGlError("glUniformMatrix4fv");
 
-            // Render frame
+            // Y texture
             GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
             checkGlError("glActiveTexture");
-            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureId);
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, yTextureId);
             checkGlError("glBindTexture");
             yuvBuffer.position(0);
             GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES20.GL_LUMINANCE, width,
                     height, 0, GLES20.GL_LUMINANCE, GLES20.GL_UNSIGNED_BYTE, yuvBuffer);
             checkGlError("glTexImage2D");
             GLES20.glUniform1i(yTextureLoc, 0);
+
+            // UV texture
+            GLES20.glActiveTexture(GLES20.GL_TEXTURE1);
+            checkGlError("glActiveTexture");
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, uvTextureId);
+            checkGlError("glBindTexture");
+            yuvBuffer.position(width*height);
+            GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES20.GL_LUMINANCE_ALPHA, width/2,
+                    height/2, 0, GLES20.GL_LUMINANCE_ALPHA, GLES20.GL_UNSIGNED_BYTE, yuvBuffer);
+            checkGlError("glTexImage2D");
+            GLES20.glUniform1i(uvTextureLoc, 1);
 
             GLES20.glEnableVertexAttribArray(aPositionLoc);
             GLES20.glVertexAttribPointer(aPositionLoc, 2,
