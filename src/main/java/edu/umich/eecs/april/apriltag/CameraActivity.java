@@ -103,7 +103,7 @@ public class CameraActivity extends AppCompatActivity {
         Log.i(TAG, "camera rotation: " + info.orientation);
 
         try {
-            camera = Camera.open();
+            camera = Camera.open(camidx);
         } catch (Exception e) {
             Log.d(TAG, "Couldn't open camera: " + e.getMessage());
             return;
