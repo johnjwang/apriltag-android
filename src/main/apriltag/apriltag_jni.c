@@ -245,6 +245,8 @@ JNIEXPORT jobject JNICALL Java_edu_umich_eecs_april_apriltag_ApriltagNative_apri
 
         // Need to respect the local reference limit
         (*env)->DeleteLocalRef(env, ad);
+        (*env)->DeleteLocalRef(env, ad_c);
+        (*env)->DeleteLocalRef(env, ad_p);
     }
 
     // Cleanup
