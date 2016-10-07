@@ -6,7 +6,8 @@
         <item name="colorAccent">@color/colorAccent</item>
     </style>
 
-    <style name="PreferencesTheme" parent="android:Theme.Holo">
+    <style name="PreferencesTheme" parent="android:ThemeOverlay.Material.Dark">
+        <item name="android:colorAccent">@color/colorAccent</item>
     </style>
 
     <style name="Widget.MyApp.Toolbar.Solid" parent="Widget.AppCompat.ActionBar">
@@ -14,7 +15,6 @@
     </style>
 
     <style name="ThemeOverlay.MyApp.ActionBar" parent="ThemeOverlay.AppCompat.ActionBar">
-        <!-- Parent theme sets colorControlNormal to textColorPrimary. -->
         <item name="android:textColorPrimary">@color/umMaize</item>
     </style>
 
