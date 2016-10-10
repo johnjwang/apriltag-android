@@ -12,14 +12,8 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.MenuInflater;
 import android.view.SurfaceView;
-import android.view.View;
-import android.widget.ArrayAdapter;
+import android.view.WindowManager;
 import android.widget.FrameLayout;
-import android.widget.HeaderViewListAdapter;
-import android.widget.ListAdapter;
-import android.widget.ListView;
-
-import java.util.ArrayList;
 
 /**
  * An example full-screen activity that shows and hides the system UI (i.e.
@@ -44,6 +38,9 @@ public class CameraActivity extends AppCompatActivity {
         // Add toolbar/actionbar
         Toolbar myToolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(myToolbar);
+
+        // Make the screen stay awake
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     }
 
     /** Release the camera when application focus is lost */

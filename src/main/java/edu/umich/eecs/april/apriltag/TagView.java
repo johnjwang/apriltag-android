@@ -458,7 +458,7 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
             // Ensure space for frame (12 bits per pixel)
             preview_size = camera.getParameters().getPreviewSize();
             Log.i(TAG, "camera preview preview_size: " + preview_size.width + "x" + preview_size.height);
-            int nbytes = preview_size.width * preview_size.height * 3 / 2;
+            int nbytes = preview_size.width * preview_size.height * 3 / 2; // XXX: What's the 3/2 scaling for?
             if (yuvBuffer == null || yuvBuffer.capacity() < nbytes) {
                 // Allocate direct byte buffer so native code access won't require a copy
                 Log.i(TAG, "Allocating buf of preview_size " + nbytes);
