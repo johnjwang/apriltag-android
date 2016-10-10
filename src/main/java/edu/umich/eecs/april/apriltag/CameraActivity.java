@@ -37,8 +37,8 @@ public class CameraActivity extends AppCompatActivity {
 
         SurfaceView overlayView = new SurfaceView(this);
         tagView = new TagView(this, overlayView.getHolder());
-        FrameLayout layout = (FrameLayout)findViewById(R.id.tag_view);
-        layout.addView(overlayView);
+        FrameLayout layout = (FrameLayout) findViewById(R.id.tag_view);
+        //layout.addView(overlayView); // TODO: Not needed?
         layout.addView(tagView);
 
         // Add toolbar/actionbar

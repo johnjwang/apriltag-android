@@ -1,5 +1,6 @@
 package edu.umich.eecs.april.apriltag;
 
+import android.animation.FloatArrayEvaluator;
 import android.content.Context;
 import android.graphics.PixelFormat;
 import android.graphics.SurfaceTexture;
@@ -8,6 +9,7 @@ import android.opengl.GLES11Ext;
 import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
 import android.opengl.Matrix;
+import android.support.v4.content.res.TypedArrayUtils;
 import android.util.Log;
 import android.view.SurfaceHolder;
 
@@ -16,6 +18,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
@@ -396,7 +399,23 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
                         points[2*i + 0] = (float)x;
                         points[2*i + 1] = (float)y;
                     }
-                    lp.draw(PVM, points, 4, COLOR_BLUE, GLES20.GL_LINE_LOOP);
+
+                    // Determine corner points
+                    float[] point_0 = Arrays.copyOfRange(points, 0, 2);
+                    float[] point_1 = Arrays.copyOfRange(points, 2, 4);
+                    float[] point_2 = Arrays.copyOfRange(points, 4, 6);
+                    float[] point_3 = Arrays.copyOfRange(points, 6, 8);
+
+                    // Determine bounding boxes
+                    float[] line_x = new float[]{point_0[0], point_0[1], point_1[0], point_1[1]};
+                    float[] line_y = new float[]{point_0[0], point_0[1], point_3[0], point_3[1]};
+                    float[] line_border = new float[]{point_1[0], point_1[1], point_2[0], point_2[1],
+                                                      point_2[0], point_2[1], point_3[0], point_3[1]};
+
+                    // Draw lines
+                    lp.draw(PVM, line_x, 2, COLOR_GREEN, GLES20.GL_LINES);
+                    lp.draw(PVM, line_y, 2, COLOR_RED, GLES20.GL_LINES);
+                    lp.draw(PVM, line_border, 4, COLOR_BLUE, GLES20.GL_LINES);
                 }
 
                 detections = null;
