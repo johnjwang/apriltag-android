@@ -149,6 +149,7 @@ public class SettingsActivity extends PreferenceActivity {
             bindPreferenceSummaryToValue(findPreference("sigma_value"));
             bindPreferenceSummaryToValue(findPreference("nthreads_value"));
             bindPreferenceSummaryToValue(findPreference("tag_family_list"));
+            bindPreferenceSummaryToValue(findPreference("device_settings_camera_facing"));
         }
 
         @Override

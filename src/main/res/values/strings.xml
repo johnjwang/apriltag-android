@@ -59,7 +59,15 @@
         <item>tag16h5</item>
     </string-array>
 
-    <string name="pref_title_camera">Use rear camera</string>
+    <string name="pref_title_camera_facing">Camera</string>
+    <string-array name="pref_camera_facing_list_titles">
+        <item>Rear (default)</item>
+        <item>Front</item>
+    </string-array>
+    <string-array name="pref_camera_facing_list_values">
+        <item>1</item>
+        <item>0</item>
+    </string-array>
 
     <string name="pref_title_camera_resolution">Camera resolution</string>
     <string-array name="pref_camera_resolution_titles">

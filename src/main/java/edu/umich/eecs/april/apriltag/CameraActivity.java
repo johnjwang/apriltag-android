@@ -86,7 +86,7 @@ public class CameraActivity extends AppCompatActivity {
         double sigma = Double.parseDouble(sharedPreferences.getString("sigma_value", "0"));
         int nthreads = Integer.parseInt(sharedPreferences.getString("nthreads_value", "0"));
         String tagFamily = sharedPreferences.getString("tag_family_list", "tag36h11");
-        boolean useRear = sharedPreferences.getBoolean("device_settings_rear_camera", true);
+        boolean useRear = (sharedPreferences.getString("device_settings_camera_facing", "1").equals("1")) ? true : false;
         Log.i(TAG, String.format("decimation: %f | sigma: %f | nthreads: %d | tagFamily: %s | useRear: %b",
                 decimation, sigma, nthreads, tagFamily, useRear));
         ApriltagNative.apriltag_init(tagFamily, 2, decimation, sigma, nthreads);
@@ -145,6 +145,11 @@ public class CameraActivity extends AppCompatActivity {
             case R.id.reset:
                 // Reset all shared preferences to default values
                 PreferenceManager.getDefaultSharedPreferences(this).edit().clear().commit();
+
+                // Restart the camera preview
+                onPause();
+                onResume();
+
                 return true;
 
             default:
