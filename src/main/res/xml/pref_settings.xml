@@ -63,6 +63,7 @@
             android:title="@string/pref_title_tag_family" />
     </PreferenceCategory>
 
+    <!--
     <PreferenceCategory
         android:title="Camera Settings"
         android:key="pref_cat_camera">
@@ -83,6 +84,7 @@
             android:title="@string/pref_title_camera_resolution" />
 
     </PreferenceCategory>
+    -->
 
     <!--
     <PreferenceCategory

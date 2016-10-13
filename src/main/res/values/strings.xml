@@ -21,10 +21,10 @@
     <string name="pref_title_refine_pose">Enable refine pose</string>
     <string name="pref_description_refine_pose">Refines poses</string>
 
-    <string name="pref_title_decimation">Decimation</string>
+    <string name="pref_title_decimation">Image decimation</string>
     <string name="pref_default_decimation">2.0</string>
 
-    <string name="pref_title_sigma">Sigma</string>
+    <string name="pref_title_sigma">Gaussian blur (sigma, in pixels)</string>
     <string name="pref_default_sigma">0.0</string>
 
     <string name="pref_title_nthreads">Number of threads</string>

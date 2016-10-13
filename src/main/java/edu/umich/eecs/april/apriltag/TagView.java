@@ -17,33 +17,33 @@ import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
 
 /**
- * Draws camera images onto a GLSurfaceView and tag detections onto a custom overlay surface.
+ * Draws camera images onto a GLSurfaceView and tag mDetections onto a custom overlay surface.
  */
 public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
     private static final String TAG = "AprilTag";
-    private Camera camera;
-    private Camera.Size preview_size;
-    private ByteBuffer yuvBuffer;
-    private SurfaceTexture st = new SurfaceTexture(0);
-    private SurfaceHolder overlay;
-    private Renderer renderer;
-    private ArrayList<ApriltagDetection> detections;
+    private Camera mCamera;
+    private Camera.Size mPreviewSize;
+    private List<Camera.Size> mSupportedPreviewSizes;
+    private ByteBuffer mYuvBuffer;
+    private SurfaceTexture mSurfaceTexture = new SurfaceTexture(0);
+    private Renderer mRenderer;
+    private ArrayList<ApriltagDetection> mDetections;
 
     public TagView(Context context, SurfaceHolder overlay) {
         super(context);
 
-        this.overlay = overlay;
         overlay.setFormat(PixelFormat.TRANSPARENT);
 
         // Use OpenGL 2.0
         setEGLContextClientVersion(2);
-        renderer = new TagView.Renderer();
-        setRenderer(renderer);
+        mRenderer = new TagView.Renderer();
+        setRenderer(mRenderer);
         setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY);
     }
 
@@ -378,17 +378,17 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
             // Update surface dimensions and scale preview to fit the surface
             // Scaling is done to maintain aspect ratio but maximally fill the surface
             // Note: Camera preview size and surface size have width/height swapped
-            int preview_width = preview_size.height;
-            int preview_height = preview_size.width;
+            int preview_width = mPreviewSize.height;
+            int preview_height = mPreviewSize.width;
 
             float width_ratio = width / (float) (preview_width);
             float height_ratio = height / (float) (preview_height);
             float scale_ratio = Math.max(width_ratio, height_ratio);
-            int draw_width = (int) (preview_size.width * scale_ratio);
-            int draw_height = (int) (preview_size.height * scale_ratio);
+            int draw_width = (int) (mPreviewSize.width * scale_ratio);
+            int draw_height = (int) (mPreviewSize.height * scale_ratio);
 
-            Matrix.setIdentityM(renderer.M, 0);
-            Matrix.scaleM(renderer.M, 0, draw_height, draw_width, 1.0f);
+            Matrix.setIdentityM(mRenderer.M, 0);
+            Matrix.scaleM(mRenderer.M, 0, draw_height, draw_width, 1.0f);
         }
 
         public void onDrawFrame(GL10 gl) {
@@ -397,18 +397,18 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
             // Redraw background color
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
 
-            if (detections != null) {
+            if (mDetections != null) {
                 // Set MVP matrix
                 Matrix.multiplyMM(PVM, 0, V, 0, M, 0);
                 Matrix.multiplyMM(PVM, 0, P, 0, PVM, 0);
 
-                tp.draw(PVM, yuvBuffer, preview_size.width, preview_size.height);
+                tp.draw(PVM, mYuvBuffer, mPreviewSize.width, mPreviewSize.height);
 
                 float[] points = new float[8];
-                for (ApriltagDetection det : detections) {
+                for (ApriltagDetection det : mDetections) {
                     for (int i = 0; i < 4; i += 1) {
-                        double x = 0.5 - (det.p[2*i + 1] / preview_size.height);
-                        double y = 0.5 - (det.p[2*i + 0] / preview_size.width);
+                        double x = 0.5 - (det.p[2*i + 1] / mPreviewSize.height);
+                        double y = 0.5 - (det.p[2*i + 0] / mPreviewSize.width);
                         points[2*i + 0] = (float)x;
                         points[2*i + 1] = (float)y;
                     }
@@ -431,49 +431,51 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
                     lp.draw(PVM, line_border, 4, COLOR_BLUE, GLES20.GL_LINES);
                 }
 
-                detections = null;
+                mDetections = null;
             }
 
             // Release the callback buffer
-            if (camera != null)
-                camera.addCallbackBuffer(yuvBuffer.array());
+            if (mCamera != null)
+                mCamera.addCallbackBuffer(mYuvBuffer.array());
         }
     }
 
     public void setCamera(Camera camera)
     {
-        if (camera == this.camera)
+        if (camera == mCamera)
             return;
 
         // Stop the previous camera preview
-        if (this.camera != null) {
+        if (mCamera != null) {
             try {
-                camera.stopPreview();
+                mCamera.stopPreview();
                 //Log.i(TAG, "Camera stop");
             } catch (Exception e) { }
         }
 
-        // Start the new camera preview
+        // Start the new mCamera preview
         if (camera != null) {
+            setHighestCameraPreviewResolution(camera);
+
             // Ensure space for frame (12 bits per pixel)
-            preview_size = camera.getParameters().getPreviewSize();
-            Log.i(TAG, "camera preview preview_size: " + preview_size.width + "x" + preview_size.height);
-            int nbytes = preview_size.width * preview_size.height * 3 / 2; // XXX: What's the 3/2 scaling for?
-            if (yuvBuffer == null || yuvBuffer.capacity() < nbytes) {
+            mPreviewSize = camera.getParameters().getPreviewSize();
+            Log.i(TAG, "camera preview PreviewSize: " + mPreviewSize.width + "x" + mPreviewSize.height);
+            int nbytes = mPreviewSize.width * mPreviewSize.height * 3 / 2; // XXX: What's the 3/2 scaling for?
+            if (mYuvBuffer == null || mYuvBuffer.capacity() < nbytes) {
                 // Allocate direct byte buffer so native code access won't require a copy
-                Log.i(TAG, "Allocating buf of preview_size " + nbytes);
-                yuvBuffer = ByteBuffer.allocateDirect(nbytes);
+                Log.i(TAG, "Allocating buf of mPreviewSize " + nbytes);
+                mYuvBuffer = ByteBuffer.allocateDirect(nbytes);
             }
 
             // Scale the rectangle on which the image texture is drawn
             // Here, the image is displayed without rescaling
-            Matrix.setIdentityM(renderer.M, 0);
-            Matrix.scaleM(renderer.M, 0, preview_size.height, preview_size.width, 1.0f);
+            Matrix.setIdentityM(mRenderer.M, 0);
+            Matrix.scaleM(mRenderer.M, 0, mPreviewSize.height, mPreviewSize.width, 1.0f);
 
-            camera.addCallbackBuffer(yuvBuffer.array());
+            camera.addCallbackBuffer(mYuvBuffer.array());
             try {
-                // Give the camera an off-screen GL texture to render on
-                camera.setPreviewTexture(st);
+                // Give the mCamera an off-screen GL texture to render on
+                camera.setPreviewTexture(mSurfaceTexture);
             } catch (IOException e) {
                 Log.d(TAG, "Couldn't set preview display");
                 return;
@@ -482,8 +484,24 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
             camera.startPreview();
             //Log.i(TAG, "Camera start");
         }
-        this.camera = camera;
+        mCamera = camera;
+    }
 
+    private void setHighestCameraPreviewResolution(Camera camera)
+    {
+        Camera.Parameters parameters = camera.getParameters();
+        List<Camera.Size> sizeList = camera.getParameters().getSupportedPreviewSizes();
+
+        Camera.Size bestSize = sizeList.get(0);
+        for (int i = 1; i < sizeList.size(); i++){
+            if ((sizeList.get(i).width * sizeList.get(i).height) > (bestSize.width * bestSize.height)){
+                bestSize = sizeList.get(i);
+            }
+        }
+
+        parameters.setPreviewSize(bestSize.width, bestSize.height);
+        Log.i(TAG, "Setting " + bestSize.width + " x " + bestSize.height);
+        camera.setParameters(parameters);
     }
 
     static class ProcessingThread extends Thread {
@@ -493,7 +511,7 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
         TagView parent;
 
         public void run() {
-            parent.detections = ApriltagNative.apriltag_detect_yuv(bytes, width, height);
+            parent.mDetections = ApriltagNative.apriltag_detect_yuv(bytes, width, height);
             parent.requestRender();
         }
     }
@@ -503,29 +521,29 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
         frameCount += 1;
         //Log.i(TAG, "frame count: " + frameCount);
 
-        // Check if camera has been released in another thread
-        if (this.camera == null)
+        // Check if mCamera has been released in another thread
+        if (this.mCamera == null)
             return;
 
         // Spin up another thread so we don't block the UI thread
         ProcessingThread thread = new ProcessingThread();
         thread.bytes = bytes;
-        thread.width = preview_size.width;
-        thread.height = preview_size.height;
+        thread.width = mPreviewSize.width;
+        thread.height = mPreviewSize.height;
         thread.parent = this;
         thread.run();
 
-        // Pass bytes to apriltag via JNI, get detections back
+        // Pass bytes to apriltag via JNI, get mDetections back
         //long start = System.currentTimeMillis();
-        //detections = ApriltagNative.apriltag_detect_yuv(bytes, preview_size.width, preview_size.height);
+        //mDetections = ApriltagNative.apriltag_detect_yuv(bytes, mPreviewSize.width, mPreviewSize.height);
         //long diff = System.currentTimeMillis() - start;
-        //Log.i(TAG, "tag detections took " + diff + " ms");
+        //Log.i(TAG, "tag mDetections took " + diff + " ms");
 
         // Render YUV image in OpenGL
         //requestRender();
 
         /*
-        // Render detections
+        // Render mDetections
         // TODO do this in OpenGL so frames are synced up properly
         Canvas canvas = overlay.lockCanvas();
         canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.SRC);
@@ -533,25 +551,25 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
         Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
         p.setStrokeWidth(5.0f);
         p.setTextSize(50);
-        for (ApriltagDetection det : detections) {
+        for (ApriltagDetection det : mDetections) {
             //Log.i(TAG, "Tag detected " + det.id);
 
             // The XY swap is due to portrait mode weirdness
-            // The camera image is 1920x1080 but the portrait bitmap is 1080x1920
+            // The mCamera image is 1920x1080 but the portrait bitmap is 1080x1920
             p.setARGB(0xff, 0, 0xff, 0);
-            canvas.drawLine(preview_size.height-(float)det.p[1], (float)det.p[0],
-                            preview_size.height-(float)det.p[3], (float)det.p[2], p);
+            canvas.drawLine(mPreviewSize.height-(float)det.p[1], (float)det.p[0],
+                            mPreviewSize.height-(float)det.p[3], (float)det.p[2], p);
             p.setARGB(0xff, 0xff, 0, 0);
-            canvas.drawLine(preview_size.height-(float)det.p[1], (float)det.p[0],
-                            preview_size.height-(float)det.p[7], (float)det.p[6], p);
+            canvas.drawLine(mPreviewSize.height-(float)det.p[1], (float)det.p[0],
+                            mPreviewSize.height-(float)det.p[7], (float)det.p[6], p);
             p.setARGB(0xff, 0, 0, 0xff);
-            canvas.drawLine(preview_size.height-(float)det.p[3], (float)det.p[2],
-                            preview_size.height-(float)det.p[5], (float)det.p[4], p);
-            canvas.drawLine(preview_size.height-(float)det.p[5], (float)det.p[4],
-                            preview_size.height-(float)det.p[7], (float)det.p[6], p);
+            canvas.drawLine(mPreviewSize.height-(float)det.p[3], (float)det.p[2],
+                            mPreviewSize.height-(float)det.p[5], (float)det.p[4], p);
+            canvas.drawLine(mPreviewSize.height-(float)det.p[5], (float)det.p[4],
+                            mPreviewSize.height-(float)det.p[7], (float)det.p[6], p);
             p.setARGB(0xff, 0, 0x99, 0xff);
             canvas.drawText(Integer.toString(det.id),
-                            preview_size.height-(float)det.c[1], (float)det.c[0], p);
+                            mPreviewSize.height-(float)det.c[1], (float)det.c[0], p);
         }
 
         p.setColor(0xffffffff);
