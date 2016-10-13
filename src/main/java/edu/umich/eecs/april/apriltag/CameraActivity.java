@@ -82,7 +82,7 @@ public class CameraActivity extends AppCompatActivity {
         // Re-initialize the Apriltag detector as settings may have changed
         verifyPreferences();
         SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
-        double decimation = Double.parseDouble(sharedPreferences.getString("decimation_value", "2"));
+        double decimation = Double.parseDouble(sharedPreferences.getString("decimation_list", "1"));
         double sigma = Double.parseDouble(sharedPreferences.getString("sigma_value", "0"));
         int nthreads = Integer.parseInt(sharedPreferences.getString("nthreads_value", "0"));
         String tagFamily = sharedPreferences.getString("tag_family_list", "tag36h11");

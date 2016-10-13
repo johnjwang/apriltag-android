@@ -22,7 +22,20 @@
     <string name="pref_description_refine_pose">Refines poses</string>
 
     <string name="pref_title_decimation">Image decimation</string>
-    <string name="pref_default_decimation">2.0</string>
+    <string-array name="pref_decimation_list_titles">
+        <item>1 (no decimation)</item>
+        <item>1.5</item>
+        <item>2</item>
+        <item>3</item>
+        <item>4</item>
+    </string-array>
+    <string-array name="pref_decimation_list_values">
+        <item>1</item>
+        <item>1.5</item>
+        <item>2</item>
+        <item>3</item>
+        <item>4</item>
+    </string-array>
 
     <string name="pref_title_sigma">Gaussian blur (sigma, in pixels)</string>
     <string name="pref_default_sigma">0.0</string>
