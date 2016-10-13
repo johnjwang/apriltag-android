@@ -96,9 +96,9 @@ public class CameraActivity extends AppCompatActivity {
         Camera.CameraInfo info = new Camera.CameraInfo();
         for (int i = 0; i < Camera.getNumberOfCameras(); i += 1) {
             Camera.getCameraInfo(i, info);
-            int desiredOrientation = useRear ? Camera.CameraInfo.CAMERA_FACING_BACK :
+            int desiredFacing = useRear ? Camera.CameraInfo.CAMERA_FACING_BACK :
                     Camera.CameraInfo.CAMERA_FACING_FRONT;
-            if (info.orientation == desiredOrientation) {
+            if (info.facing == desiredFacing) {
                 camidx = i;
                 break;
             }
@@ -115,14 +115,6 @@ public class CameraActivity extends AppCompatActivity {
             return;
         }
 
-
-        /*
-        ListView list = (ListView) findViewById(R.id.camera_resolution);
-        ArrayList<String> arrayList = new ArrayList<>();
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(getApplicationContext(), R.layout.main, arrayList);
-        list.setAdapter(adapter);
-        // TODO: Add these supported resolutions to the listview, above code doesn't quite work
-        */
         Log.i(TAG, "supported resolutions:");
         Camera.Parameters params = camera.getParameters();
         for (Camera.Size s : params.getSupportedPreviewSizes()) {

@@ -63,7 +63,6 @@
             android:title="@string/pref_title_tag_family" />
     </PreferenceCategory>
 
-    <!--
     <PreferenceCategory
         android:title="Camera Settings"
         android:key="pref_cat_camera">
@@ -72,19 +71,19 @@
             android:defaultValue="true"
             android:key="device_settings_rear_camera"
             android:title="@string/pref_title_camera" />
-
-        <ListPreference
-            android:id="@+id/camera_resolution"
-            android:defaultValue="1080"
-            android:entries="@array/pref_camera_resolution_titles"
-            android:entryValues="@array/pref_camera_resolution_values"
-            android:key="camera_resolution"
-            android:negativeButtonText="@null"
-            android:positiveButtonText="@null"
-            android:title="@string/pref_title_camera_resolution" />
+        <!--
+            <ListPreference
+                android:id="@+id/camera_resolution"
+                android:defaultValue="1080"
+                android:entries="@array/pref_camera_resolution_titles"
+                android:entryValues="@array/pref_camera_resolution_values"
+                android:key="camera_resolution"
+                android:negativeButtonText="@null"
+                android:positiveButtonText="@null"
+                android:title="@string/pref_title_camera_resolution" />
+        -->
 
     </PreferenceCategory>
-    -->
 
     <!--
     <PreferenceCategory
