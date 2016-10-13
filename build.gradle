@@ -8,8 +8,8 @@ android {
         applicationId "edu.umich.eecs.april.apriltag"
         minSdkVersion 14
         targetSdkVersion 24
-        versionCode 2
-        versionName "0.2"
+        versionCode 4
+        versionName "0.4"
     }
     buildTypes {
         release {
