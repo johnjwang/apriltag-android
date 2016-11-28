@@ -504,6 +504,8 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
 
         parameters.setPreviewSize(bestSize.width, bestSize.height);
         Log.i(TAG, "Setting " + bestSize.width + " x " + bestSize.height);
+
+        parameters.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO);
         camera.setParameters(parameters);
     }
 
