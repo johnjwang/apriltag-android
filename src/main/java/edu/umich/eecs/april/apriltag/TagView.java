@@ -368,6 +368,9 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
         }
 
         public void onSurfaceChanged(GL10 gl, int width, int height) {
+            if (mCamera == null)
+                return;
+
             Log.i(TAG, "surface changed: " + width + "x" + height);
 
             GLES20.glViewport(0, 0, width, height);

@@ -1,10 +1,14 @@
 package edu.umich.eecs.april.apriltag;
 
+import android.Manifest;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.hardware.Camera;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
@@ -24,6 +28,9 @@ public class CameraActivity extends AppCompatActivity {
     private Camera camera;
     private TagView tagView;
 
+    private static final int MY_PERMISSIONS_REQUEST_CAMERA = 77;
+    private int has_camera_permissions = 0;
+
     private void verifyPreferences() {
         SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
 
@@ -40,6 +47,17 @@ public class CameraActivity extends AppCompatActivity {
 
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // Ensure we have permission to use the camera (Permission Requesting for Android 6.0/SDK 23 and higher)
+        if (ContextCompat.checkSelfPermission(this,
+                Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            // Assume user knows enough about the app to know why we need the camera, just ask for permission
+            ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.CAMERA},
+                    MY_PERMISSIONS_REQUEST_CAMERA);
+        } else {
+            this.has_camera_permissions = 1;
+        }
 
         setContentView(R.layout.main);
 
@@ -76,6 +94,10 @@ public class CameraActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         tagView.onResume();
+
+        if (this.has_camera_permissions == 0) {
+            return;
+        }
 
         //Log.i(TAG, "Resume");
 
@@ -154,6 +176,36 @@ public class CameraActivity extends AppCompatActivity {
 
             default:
                 return super.onOptionsItemSelected(item);
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode,
+                                           String permissions[], int[] grantResults) {
+        switch (requestCode) {
+            case MY_PERMISSIONS_REQUEST_CAMERA: {
+                // If request is cancelled, the result arrays are empty.
+                if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    Log.i(TAG, "App GRANTED camera permissions");
+
+                    // Set flag
+                    this.has_camera_permissions = 1;
+
+                    // Restart the TagViewer
+                    SurfaceView overlayView = new SurfaceView(this);
+                    tagView = new TagView(this, overlayView.getHolder());
+                    FrameLayout layout = (FrameLayout) findViewById(R.id.tag_view);
+                    layout.addView(tagView);
+
+                    // Restart the camera
+                    onPause();
+                    onResume();
+                } else {
+                    Log.i(TAG, "App DENIED camera permissions");
+                    this.has_camera_permissions = 0;
+                }
+                return;
+            }
         }
     }
 }
