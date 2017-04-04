@@ -1,12 +1,10 @@
-/* (C) 2013-2016, The Regents of The University of Michigan
+/* Copyright (C) 2013-2016, The Regents of The University of Michigan.
 All rights reserved.
 
 This software was developed in the APRIL Robotics Lab under the
 direction of Edwin Olson, ebolson@umich.edu. This software may be
-available under alternative licensing terms; contact the address
-above.
+available under alternative licensing terms; contact the address above.
 
-   BSD
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
 
@@ -29,20 +27,16 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 The views and conclusions contained in the software and documentation are those
 of the authors and should not be interpreted as representing official policies,
-either expressed or implied, of the FreeBSD Project.
- */
+either expressed or implied, of the Regents of The University of Michigan.
+*/
 
 #include <math.h>
 #include <stdio.h>
 
-#include "matd.h"
-#include "zarray.h"
-#include "homography.h"
-
-static inline float sq(float v)
-{
-    return v*v;
-}
+#include "common/matd.h"
+#include "common/zarray.h"
+#include "common/homography.h"
+#include "common/math_util.h"
 
 // correspondences is a list of float[4]s, consisting of the points x
 // and y concatenated. We will compute a homography such that y = Hx
@@ -179,9 +173,6 @@ matd_t *homography_compute(zarray_t *correspondences, int flags)
 
     matd_t *H = matd_create(3,3);
 
-    /* printf("\n"); */
-    /* matd_print(A, "%15g"); */
-
     if (flags & HOMOGRAPHY_COMPUTE_FLAG_INVERSE) {
         // compute singular vector by (carefully) inverting the rank-deficient matrix.
 
@@ -230,14 +221,6 @@ matd_t *homography_compute(zarray_t *correspondences, int flags)
     } else {
         // compute singular vector using SVD. A bit slower, but more accurate.
         matd_svd_t svd = matd_svd_flags(A, MATD_SVD_NO_WARNINGS);
-
-        /* printf("\nU:\n"); */
-        /* matd_print(svd.U, "%15g"); */
-        /* printf("\nS:\n"); */
-        /* matd_print(svd.S, "%15g"); */
-        /* printf("\nV:\n"); */
-        /* matd_print(svd.V, "%15g"); */
-        /* printf("\n\n\n"); */
 
         for (int i = 0; i < 3; i++)
             for (int j = 0; j < 3; j++)

@@ -1,12 +1,10 @@
-/* (C) 2013-2016, The Regents of The University of Michigan
+/* Copyright (C) 2013-2016, The Regents of The University of Michigan.
 All rights reserved.
 
 This software was developed in the APRIL Robotics Lab under the
 direction of Edwin Olson, ebolson@umich.edu. This software may be
-available under alternative licensing terms; contact the address
-above.
+available under alternative licensing terms; contact the address above.
 
-   BSD
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
 
@@ -29,8 +27,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 The views and conclusions contained in the software and documentation are those
 of the authors and should not be interpreted as representing official policies,
-either expressed or implied, of the FreeBSD Project.
- */
+either expressed or implied, of the Regents of The University of Michigan.
+*/
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -40,8 +38,9 @@ either expressed or implied, of the FreeBSD Project.
 #include <math.h>
 #include <float.h>
 
-#include "svd22.h"
-#include "matd.h"
+#include "common/math_util.h"
+#include "common/svd22.h"
+#include "common/matd.h"
 
 // a matd_t with rows=0 cols=0 is a SCALAR.
 
@@ -845,12 +844,6 @@ matd_t *matd_op(const char *expr, ...)
     return res_copy;
 }
 
-static inline double sq(double v)
-{
-    return v*v;
-}
-
-
 double matd_vec_mag(const matd_t *a)
 {
     assert(a != NULL);
@@ -1142,10 +1135,10 @@ static matd_svd_t matd_svd_tall(matd_t *A, int flags)
         }
     }
 
-    // empirically, we find a roughly linear worst-case number of iterations
-    // as a function of rows*cols. maxiters ~= 1.5*nrows*ncols
-    // we're a bit conservative below.
-    int maxiters = 200 + 2*A->nrows*A->ncols;
+    // maxiters used to be smaller to prevent us from looping forever,
+    // but this doesn't seem to happen any more with our more stable
+    // svd22 implementation.
+    int maxiters = 1UL << 30;
     assert(maxiters > 0); // reassure clang
     int iter;
 
@@ -1287,7 +1280,11 @@ static matd_svd_t matd_svd_tall(matd_t *A, int flags)
             // termination condition.
             if (maxv < tol)
                 break;
+        } else {
+            assert(0);
         }
+
+//        printf(">>> %5d %3d, %3d %15g\n", maxi, maxj, iter, maxv);
 
         // Now, solve the 2x2 SVD problem for the matrix
         // [ A0 A1 ]
@@ -1373,7 +1370,7 @@ static matd_svd_t matd_svd_tall(matd_t *A, int flags)
         printf("WARNING: maximum iters (maximum = %d, matrix %d x %d, max=%.15f)\n",
                iter, A->nrows, A->ncols, maxv);
 
-        matd_print(A, "%15f");
+//        matd_print(A, "%15f");
     }
 
     // them all positive by flipping the corresponding columns of
@@ -1503,7 +1500,7 @@ matd_svd_t matd_svd_flags(matd_t *A, int flags)
 
 matd_plu_t *matd_plu(const matd_t *a)
 {
-    int *piv = calloc(a->nrows, sizeof(int));
+    unsigned int *piv = calloc(a->nrows, sizeof(unsigned int));
     int pivsign = 1;
     matd_t *lu = matd_copy(a);
 

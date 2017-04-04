@@ -1,12 +1,10 @@
-/* (C) 2013-2016, The Regents of The University of Michigan
+/* Copyright (C) 2013-2016, The Regents of The University of Michigan.
 All rights reserved.
 
 This software was developed in the APRIL Robotics Lab under the
 direction of Edwin Olson, ebolson@umich.edu. This software may be
-available under alternative licensing terms; contact the address
-above.
+available under alternative licensing terms; contact the address above.
 
-   BSD
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
 
@@ -29,8 +27,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 The views and conclusions contained in the software and documentation are those
 of the authors and should not be interpreted as representing official policies,
-either expressed or implied, of the FreeBSD Project.
- */
+either expressed or implied, of the Regents of The University of Michigan.
+*/
 
 #ifndef _POSTSCRIPT_UTILS_H
 #define _POSTSCRIPT_UTILS_H
@@ -40,13 +38,13 @@ either expressed or implied, of the FreeBSD Project.
 // with Y up coordinate axis (e.g. upside down).
 static void postscript_image(FILE *f, image_u8_t *im)
 {
-    fprintf(f, "/readstring {\n  currentfile exch readhexstring pop\n} bind def\n");
+//    fprintf(f, "/readstring {\n  currentfile exch readhexstring pop\n} bind def\n");
     fprintf(f, "/picstr %d string def\n", im->width);
 
     fprintf(f, "%d %d 8 [1 0 0 1 0 0]\n",
             im->width, im->height);
 
-    fprintf(f, "{ picstr readstring }\nimage\n");
+    fprintf(f, "{currentfile picstr readhexstring pop}\nimage\n");
 
     for (int y = 0; y < im->height; y++) {
         for (int x = 0; x < im->width; x++) {
@@ -56,6 +54,8 @@ static void postscript_image(FILE *f, image_u8_t *im)
                 fprintf(f, "\n");
         }
     }
+
+    fprintf(f, "\n");
 }
 
 #endif

@@ -1,12 +1,10 @@
-/* (C) 2013-2016, The Regents of The University of Michigan
+/* Copyright (C) 2013-2016, The Regents of The University of Michigan.
 All rights reserved.
 
 This software was developed in the APRIL Robotics Lab under the
 direction of Edwin Olson, ebolson@umich.edu. This software may be
-available under alternative licensing terms; contact the address
-above.
+available under alternative licensing terms; contact the address above.
 
-   BSD
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
 
@@ -29,8 +27,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 The views and conclusions contained in the software and documentation are those
 of the authors and should not be interpreted as representing official policies,
-either expressed or implied, of the FreeBSD Project.
- */
+either expressed or implied, of the Regents of The University of Michigan.
+*/
 
 // limitation: image size must be <32768 in width and height. This is
 // because we use a fixed-point 16 bit integer representation with one
@@ -39,6 +37,7 @@ either expressed or implied, of the FreeBSD Project.
 #include <assert.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdint.h>
 
 #include "apriltag.h"
 #include "common/image_u8x3.h"
@@ -48,58 +47,20 @@ either expressed or implied, of the FreeBSD Project.
 #include "common/timeprofile.h"
 #include "common/zmaxheap.h"
 #include "common/postscript_utils.h"
-
-/*
-static inline uint32_t u64hash_1(uint64_t x) {
-    x = ((x >> 16) ^ x) * 0x45d9f3b;
-    x = ((x >> 16) ^ x) * 0x45d9f3b;
-    x = ((x >> 16) ^ x);
-    return (uint32_t) x;
-}
-*/
-
-/*
-static inline double terrible_atan2_quadrant0(double y, double x)
-{
-    if (x > y)
-        return y/x;
-    return 2-x/y;
-}
-
-static inline double terrible_atan2(double y, double x)
-{
-    const double K = 2*M_PI / 8;
-
-    if (x >= 0) {
-        if (y >= 0)
-            return K*terrible_atan2_quadrant0(y, x);  // quadrant 1
-        else
-            return -K*terrible_atan2_quadrant0(-y, x); // quadrant 4
-    } else {
-        if (y >= 0)
-            return K*(4 - terrible_atan2_quadrant0(y, -x)); // quadrant 2
-        else
-            return K*(-4 + terrible_atan2_quadrant0(-y, -x)); // quadrant 3
-    }
-}
-*/
+#include "common/math_util.h"
 
 static inline uint32_t u64hash_2(uint64_t x) {
     return (2654435761 * x) >> 32;
     return (uint32_t) x;
 }
 
-#define TNAME uint64_zarray_hash
-#define TKEYTYPE uint64_t
-#define TVALTYPE zarray_t*
-#define TKEYHASH(pk) (u64hash_2(*(pk)))
-#define TKEYEQUAL(pka, pkb) (*(pka) == *(pkb))
-#include "common/thash_impl.h"
-#undef TKEYEQUAL
-#undef TKEYHASH
-#undef TKEYTYPE
-#undef TVALTYPE
-#undef TNAME
+struct uint64_zarray_entry
+{
+    uint64_t id;
+    zarray_t *cluster;
+
+    struct uint64_zarray_entry *next;
+};
 
 #ifndef M_PI
 # define M_PI 3.141592653589793238462643383279502884196
@@ -110,6 +71,7 @@ struct pt
     // Note: these represent 2*actual value.
     uint16_t x, y;
     float theta;
+    int16_t gx, gy;
 };
 
 struct unionfind_task
@@ -155,24 +117,9 @@ struct line_fit_pt
     double W; // total weight
 };
 
-static inline double sq(double v)
-{
-    return v*v;
-}
-
-static inline int imin(int a, int b)
-{
-    return a < b ? a : b;
-}
-
-static inline int imax(int a, int b)
-{
-    return a < b ? b : a;
-}
-
 static inline void ptsort(struct pt *pts, int sz)
 {
-#define MAYBE_SWAP(arr,apos,bpos) \
+#define MAYBE_SWAP(arr,apos,bpos)                                   \
     if (arr[apos].theta > arr[bpos].theta) {                        \
         tmp = arr[apos]; arr[apos] = arr[bpos]; arr[bpos] = tmp;    \
     };
@@ -712,6 +659,7 @@ int quad_segment_agg(apriltag_detector_t *td, zarray_t *cluster, struct line_fit
     }
 
     free(rvalloc);
+    zmaxheap_destroy(heap);
 
     int idx = 0;
     for (int i = 0; i < sz; i++) {
@@ -762,6 +710,8 @@ int fit_quad(apriltag_detector_t *td, image_u8_t *im, zarray_t *cluster, struct 
     double cx = (xmin + xmax) * 0.5 + 0.05118;
     double cy = (ymin + ymax) * 0.5 + -0.028581;
 
+    double dot = 0;
+
     for (int pidx = 0; pidx < zarray_size(cluster); pidx++) {
         struct pt *p;
         zarray_get_volatile(cluster, pidx, &p);
@@ -770,13 +720,19 @@ int fit_quad(apriltag_detector_t *td, image_u8_t *im, zarray_t *cluster, struct 
         double dy = p->y - cy;
 
         p->theta = atan2f(dy, dx);
+
+        dot += dx*p->gx + dy*p->gy;
 //        p->theta = terrible_atan2(dy, dx);
     }
+
+    // Ensure that the black border is inside the white border.
+    if (dot < 0)
+        return 0;
 
     // we now sort the points according to theta. This is a prepatory
     // step for segmenting them into four lines.
     if (1) {
-//        zarray_sort(cluster, pt_compare_theta);
+        //        zarray_sort(cluster, pt_compare_theta);
         ptsort((struct pt*) cluster->data, zarray_size(cluster));
 
         // remove duplicate points. (A byproduct of our segmentation system.)
@@ -809,7 +765,7 @@ int fit_quad(apriltag_detector_t *td, image_u8_t *im, zarray_t *cluster, struct 
             sz = outpos;
         }
 
-   } else {
+    } else {
         // This is a counting sort in which we retain at most one
         // point for every bucket; the bucket index is computed from
         // theta. Since a good quad completes a complete revolution,
@@ -821,7 +777,7 @@ int fit_quad(apriltag_detector_t *td, image_u8_t *im, zarray_t *cluster, struct 
         // points due to collisions.
         int nbuckets = 4*sz;
 
-        #define ASSOC 2
+#define ASSOC 2
         struct pt v[nbuckets][ASSOC];
         memset(v, 0, sizeof(v));
 
@@ -991,7 +947,6 @@ int fit_quad(apriltag_detector_t *td, image_u8_t *im, zarray_t *cluster, struct 
             double err;
             fit_line(lfps, sz, i0, i1, lines[i], NULL, &err);
 
-            // XXX VALUE?
             if (err > td->qtp.max_line_fit_mse) {
                 res = 0;
                 goto finish;
@@ -1051,16 +1006,41 @@ int fit_quad(apriltag_detector_t *td, image_u8_t *im, zarray_t *cluster, struct 
         }
     }
 
-    // reject quads with edges that are too short or long.
+    // reject quads that are too small
     if (1) {
-        for (int i = 0; i < 3; i++) {
-            double dist2 = sq(quad->p[i][0] - quad->p[i+1][0]) +
-                sq(quad->p[i][1] - quad->p[i+1][1]);
+        double area = 0;
 
-            if (dist2 < sq(6) || dist2 > sq(4096)) {
-                res = 0;
-                goto finish;
-            }
+        // get area of triangle formed by points 0, 1, 2, 0
+        double length[3], p;
+        for (int i = 0; i < 3; i++) {
+            int idxa = i; // 0, 1, 2,
+            int idxb = (i+1) % 3; // 1, 2, 0
+            length[i] = sqrt(sq(quad->p[idxb][0] - quad->p[idxa][0]) +
+                             sq(quad->p[idxb][1] - quad->p[idxa][1]));
+        }
+        p = (length[0] + length[1] + length[2]) / 2;
+
+        area += sqrt(p*(p-length[0])*(p-length[1])*(p-length[2]));
+
+        // get area of triangle formed by points 2, 3, 0, 2
+        for (int i = 0; i < 3; i++) {
+            int idxs[] = { 2, 3, 0, 2 };
+            int idxa = idxs[i];
+            int idxb = idxs[i+1];
+            length[i] = sqrt(sq(quad->p[idxb][0] - quad->p[idxa][0]) +
+                             sq(quad->p[idxb][1] - quad->p[idxa][1]));
+        }
+        p = (length[0] + length[1] + length[2]) / 2;
+
+        area += sqrt(p*(p-length[0])*(p-length[1])*(p-length[2]));
+
+        // we don't actually know the family yet (quad detection is generic.)
+        // This threshold is based on a 6x6 tag (which is actually 8x8)
+//        int d = fam->d + fam->black_border*2;
+        int d = 8;
+        if (area < d*d) {
+            res = 0;
+            goto finish;
         }
     }
 
@@ -1086,6 +1066,7 @@ int fit_quad(apriltag_detector_t *td, image_u8_t *im, zarray_t *cluster, struct 
             total += dtheta;
         }
 
+        // looking for 2PI
         if (total < 6.2 || total > 6.4) {
             res = 0;
             goto finish;
@@ -1097,39 +1078,12 @@ int fit_quad(apriltag_detector_t *td, image_u8_t *im, zarray_t *cluster, struct 
     // pixel actually spans from to [x, x+1), [y, y+1) the mean value of which
     // is +.5 higher than x & y.
 /*    double delta = .5;
-    for (int i = 0; i < 4; i++) {
-        quad->p[i][0] += delta;
-        quad->p[i][1] += delta;
-    }
+      for (int i = 0; i < 4; i++) {
+      quad->p[i][0] += delta;
+      quad->p[i][1] += delta;
+      }
 */
   finish:
-/*
-    if (res) {
-        static image_u8_t *im;
-
-        if (im == NULL)
-            im = image_u8_create(1920,1080);
-
-        for (int j = 0; j < 4; j++) {
-            int i0 = indices[j];
-            int i1 = indices[(j+1)&3];
-
-            if (i1 < i0)
-                i1 += sz;
-
-            for (int i = i0; i <= i1; i++) {
-                struct pt *p;
-                // XXX Needs adjusting for fixed-point
-                zarray_get_volatile(cluster, i % sz, &p);
-                im->buf[((int) p->y)*im->stride + ((int) p->x)] = 64 + 128*(j%2);
-            }
-        }
-
-        char name[1024];
-        sprintf(name, "debug_seg.pnm", utime_now());
-        image_u8_write_pnm(im, name);
-    }
-*/
 
     free(lfps);
 
@@ -1191,8 +1145,10 @@ static void do_quad_task(void *p)
         // a cluster should contain only boundary points around the
         // tag. it cannot be bigger than the whole screen. (Reject
         // large connected blobs that will be prohibitively slow to
-        // fit quads to.)
-        if (zarray_size(cluster) > 4*(w+h)) {
+        // fit quads to.) A typical point along an edge is added three
+        // times (because it has 3 neighbors). The maximum perimeter
+        // is 2w+2h.
+        if (zarray_size(cluster) > 3*(2*w+2*h)) {
             continue;
         }
 
@@ -1210,12 +1166,12 @@ static void do_quad_task(void *p)
 
 image_u8_t *threshold(apriltag_detector_t *td, image_u8_t *im)
 {
-    int w = im->width, h = im->height, is = im->stride;
+    int w = im->width, h = im->height, s = im->stride;
     assert(w < 32768);
     assert(h < 32768);
 
-    image_u8_t *threshim = image_u8_create(w, h);
-    int ts = threshim->stride;
+    image_u8_t *threshim = image_u8_create_alignment(w, h, s);
+    assert(threshim->stride == s);
 
     // The idea is to find the maximum and minimum values in a
     // window around each pixel. If it's a contrast-free region
@@ -1259,7 +1215,7 @@ image_u8_t *threshold(apriltag_detector_t *td, image_u8_t *im)
 
                 for (int dx = 0; dx < tilesz; dx++) {
 
-                    uint8_t v = im->buf[(ty*tilesz+dy)*is + tx*tilesz + dx];
+                    uint8_t v = im->buf[(ty*tilesz+dy)*s + tx*tilesz + dx];
                     if (v < min)
                         min = v;
                     if (v > max)
@@ -1323,7 +1279,7 @@ image_u8_t *threshold(apriltag_detector_t *td, image_u8_t *im)
                     for (int dx = 0; dx < tilesz; dx++) {
                         int x = tx*tilesz + dx;
 
-                        threshim->buf[y*ts+x] = 127;
+                        threshim->buf[y*s+x] = 127;
                     }
                 }
                 continue;
@@ -1341,11 +1297,11 @@ image_u8_t *threshold(apriltag_detector_t *td, image_u8_t *im)
                 for (int dx = 0; dx < tilesz; dx++) {
                     int x = tx*tilesz + dx;
 
-                    uint8_t v = im->buf[y*is+x];
+                    uint8_t v = im->buf[y*s+x];
                     if (v > thresh)
-                        threshim->buf[y*ts+x] = 255;
+                        threshim->buf[y*s+x] = 255;
                     else
-                        threshim->buf[y*ts+x] = 0;
+                        threshim->buf[y*s+x] = 0;
                 }
             }
         }
@@ -1379,17 +1335,53 @@ image_u8_t *threshold(apriltag_detector_t *td, image_u8_t *im)
                 int min = im_min[ty*tw + tx];
                 int thresh = min + (max - min) / 2;
 
-                uint8_t v = im->buf[y*is+x];
+                uint8_t v = im->buf[y*s+x];
                 if (v > thresh)
-                    threshim->buf[y*ts+x] = 255;
+                    threshim->buf[y*s+x] = 255;
                 else
-                    threshim->buf[y*ts+x] = 0;
+                    threshim->buf[y*s+x] = 0;
             }
         }
     }
 
     free(im_min);
     free(im_max);
+
+    // this is a dilate/erode deglitching scheme that does not improve
+    // anything as far as I can tell.
+    if (0 || td->qtp.deglitch) {
+        image_u8_t *tmp = image_u8_create(w, h);
+
+        for (int y = 1; y + 1 < h; y++) {
+            for (int x = 1; x + 1 < w; x++) {
+                uint8_t max = 0;
+                for (int dy = -1; dy <= 1; dy++) {
+                    for (int dx = -1; dx <= 1; dx++) {
+                        uint8_t v = threshim->buf[(y+dy)*s + x + dx];
+                        if (v > max)
+                            max = v;
+                    }
+                }
+                tmp->buf[y*s+x] = max;
+            }
+        }
+
+        for (int y = 1; y + 1 < h; y++) {
+            for (int x = 1; x + 1 < w; x++) {
+                uint8_t min = 255;
+                for (int dy = -1; dy <= 1; dy++) {
+                    for (int dx = -1; dx <= 1; dx++) {
+                        uint8_t v = tmp->buf[(y+dy)*s + x + dx];
+                        if (v < min)
+                            min = v;
+                    }
+                }
+                threshim->buf[y*s+x] = min;
+            }
+        }
+
+        image_u8_destroy(tmp);
+    }
 
     timeprofile_stamp(td->tp, "threshold");
 
@@ -1398,13 +1390,13 @@ image_u8_t *threshold(apriltag_detector_t *td, image_u8_t *im)
 
 // basically the same as threshold(), but assumes the input image is a
 // bayer image. It collects statistics separately for each 2x2 block
-// of pixels.
+// of pixels. NOT WELL TESTED.
 image_u8_t *threshold_bayer(apriltag_detector_t *td, image_u8_t *im)
 {
-    int w = im->width, h = im->height, is = im->stride;
+    int w = im->width, h = im->height, s = im->stride;
 
-    image_u8_t *threshim = image_u8_create(w, h);
-    int ts = threshim->stride;
+    image_u8_t *threshim = image_u8_create_alignment(w, h, s);
+    assert(threshim->stride == s);
 
     int tilesz = 32;
     assert((tilesz & 1) == 0); // must be multiple of 2
@@ -1435,7 +1427,7 @@ image_u8_t *threshold_bayer(apriltag_detector_t *td, image_u8_t *im)
                     // which bayer element is this pixel?
                     int idx = (2*(dy&1) + (dx&1));
 
-                    uint8_t v = im->buf[(ty*tilesz+dy)*is + tx*tilesz + dx];
+                    uint8_t v = im->buf[(ty*tilesz+dy)*s + tx*tilesz + dx];
                     if (v < min[idx])
                         min[idx] = v;
                     if (v > max[idx])
@@ -1498,8 +1490,8 @@ image_u8_t *threshold_bayer(apriltag_detector_t *td, image_u8_t *im)
                     // which bayer element is this pixel?
                     int idx = (2*(y&1) + (x&1));
 
-                    uint8_t v = im->buf[y*is+x];
-                    threshim->buf[y*ts+x] = v > thresh[idx];
+                    uint8_t v = im->buf[y*s+x];
+                    threshim->buf[y*s+x] = v > thresh[idx];
                 }
             }
         }
@@ -1572,7 +1564,10 @@ zarray_t *apriltag_quad_thresh(apriltag_detector_t *td, image_u8_t *im)
 
     timeprofile_stamp(td->tp, "unionfind");
 
-    uint64_zarray_hash_t *clustermap = uint64_zarray_hash_create();
+    // XXX sizing??
+    int nclustermap = 2*w*h - 1;
+
+    struct uint64_zarray_entry **clustermap = calloc(nclustermap, sizeof(struct uint64_zarray_entry*));
 
     for (int y = 1; y < h-1; y++) {
         for (int x = 1; x < w-1; x++) {
@@ -1584,9 +1579,30 @@ zarray_t *apriltag_quad_thresh(apriltag_detector_t *td, image_u8_t *im)
             // XXX don't query this until we know we need it?
             uint64_t rep0 = unionfind_get_representative(uf, y*w + x);
 
+            // whenever we find two adjacent pixels such that one is
+            // white and the other black, we add the point half-way
+            // between them to a cluster associated with the unique
+            // ids of the white and black regions.
+            //
+            // We additionally compute the gradient direction (i.e., which
+            // direction was the white pixel?) Note: if (v1-v0) == 255, then
+            // (dx,dy) points towards the white pixel. if (v1-v0) == -255, then
+            // (dx,dy) points towards the black pixel. p.gx and p.gy will thus
+            // be -255, 0, or 255.
+            //
+            // Note that any given pixel might be added to multiple
+            // different clusters. But in the common case, a given
+            // pixel will be added multiple times to the same cluster,
+            // which increases the size of the cluster and thus the
+            // computational costs.
+            //
+            // A possible optimization would be to combine entries
+            // within the same cluster.
+
 #define DO_CONN(dx, dy)                                                 \
             if (1) {                                                    \
                 uint8_t v1 = threshim->buf[y*ts + dy*ts + x + dx];      \
+                                                                        \
                 if (v0 + v1 == 255) {                                   \
                     uint64_t rep1 = unionfind_get_representative(uf, y*w + dy*w + x + dx); \
                     uint64_t clusterid;                                 \
@@ -1594,18 +1610,28 @@ zarray_t *apriltag_quad_thresh(apriltag_detector_t *td, image_u8_t *im)
                         clusterid = (rep1 << 32) + rep0;                \
                     else                                                \
                         clusterid = (rep0 << 32) + rep1;                \
-                    zarray_t *cluster = NULL;                           \
-                    if (!uint64_zarray_hash_get(clustermap, &clusterid, &cluster)) { \
-                        cluster = zarray_create(sizeof(struct pt));     \
-                        uint64_zarray_hash_put(clustermap, &clusterid, &cluster, NULL, NULL); \
+                                                                        \
+                    /* XXX lousy hash function */                       \
+                    uint32_t clustermap_bucket = u64hash_2(clusterid) % nclustermap; \
+                    struct uint64_zarray_entry *entry = clustermap[clustermap_bucket]; \
+                    while (entry && entry->id != clusterid)     {       \
+                        entry = entry->next;                            \
                     }                                                   \
-                    struct pt p = { .x = 2*x + dx, .y = 2*y + dy };     \
-                    zarray_add(cluster, &p);                            \
+                                                                        \
+                    if (!entry) {                                       \
+                        entry = calloc(1, sizeof(struct uint64_zarray_entry)); \
+                        entry->id = clusterid;                          \
+                        entry->cluster = zarray_create(sizeof(struct pt)); \
+                        entry->next = clustermap[clustermap_bucket];    \
+                        clustermap[clustermap_bucket] = entry;          \
+                    }                                                   \
+                                                                        \
+                    struct pt p = { .x = 2*x + dx, .y = 2*y + dy, .gx = dx*((int) v1-v0), .gy = dy*((int) v1-v0)}; \
+                    zarray_add(entry->cluster, &p);                     \
                 }                                                       \
             }
 
-
-            // do 4 connectivity
+            // do 4 connectivity. NB: Arguments must be [-1, 1] or we'll overflow .gx, .gy
             DO_CONN(1, 0);
             DO_CONN(0, 1);
 
@@ -1658,22 +1684,63 @@ zarray_t *apriltag_quad_thresh(apriltag_detector_t *td, image_u8_t *im)
 
     timeprofile_stamp(td->tp, "make clusters");
 
-
     ////////////////////////////////////////////////////////
     // step 3. process each connected component.
     zarray_t *clusters = zarray_create(sizeof(zarray_t*)); //, uint64_zarray_hash_size(clustermap));
     if (1) {
-        uint64_zarray_hash_iterator_t zit;
-        uint64_zarray_hash_iterator_init(clustermap, &zit);
-        uint64_t key;
-        zarray_t *value;
-        while (uint64_zarray_hash_iterator_next(&zit, &key, &value)) {
-            zarray_add(clusters, &value);
+        for (int i = 0; i < nclustermap; i++) {
+
+            for (struct uint64_zarray_entry *entry = clustermap[i]; entry; entry = entry->next) {
+                // XXX reject clusters here?
+                zarray_add(clusters, &entry->cluster);
+            }
         }
     }
 
-//    uint64_zarray_hash_performance(clustermap);
-    uint64_zarray_hash_destroy(clustermap);
+
+    if (td->debug) {
+        image_u8x3_t *d = image_u8x3_create(w, h);
+
+        for (int i = 0; i < zarray_size(clusters); i++) {
+            zarray_t *cluster;
+            zarray_get(clusters, i, &cluster);
+
+            uint32_t r, g, b;
+
+            if (1) {
+                const int bias = 50;
+                r = bias + (random() % (200-bias));
+                g = bias + (random() % (200-bias));
+                b = bias + (random() % (200-bias));
+            }
+
+            for (int j = 0; j < zarray_size(cluster); j++) {
+                struct pt *p;
+                zarray_get_volatile(cluster, j, &p);
+
+                int x = p->x / 2;
+                int y = p->y / 2;
+                d->buf[y*d->stride + 3*x + 0] = r;
+                d->buf[y*d->stride + 3*x + 1] = g;
+                d->buf[y*d->stride + 3*x + 2] = b;
+            }
+        }
+
+        image_u8x3_write_pnm(d, "debug_clusters.pnm");
+        image_u8x3_destroy(d);
+    }
+
+    if (1) {
+      for (int i = 0; i < nclustermap; i++) {
+        struct uint64_zarray_entry *entry = clustermap[i];
+        while (entry) {
+          struct uint64_zarray_entry *tmp = entry->next;
+          free(entry);
+          entry = tmp;
+        }
+      }
+      free(clustermap);
+    }
 
     zarray_t *quads = zarray_create(sizeof(struct quad));
 
@@ -1738,25 +1805,7 @@ zarray_t *apriltag_quad_thresh(apriltag_detector_t *td, image_u8_t *im)
         fclose(f);
     }
 
-//        printf("  %d %d %d %d\n", indices[0], indices[1], indices[2], indices[3]);
-
-/*
-        if (td->debug) {
-            for (int i = 0; i < 4; i++) {
-            int i0 = indices[i];
-                int i1 = indices[(i+1)&3];
-
-                if (i1 < i0)
-                    i1 += zarray_size(cluster);
-
-                for (int j = i0; j <= i1; j++) {
-                    struct pt *p;
-                    zarray_get_volatile(cluster, j % zarray_size(cluster), &p);
-
-                    edgeim->buf[p->y*edgeim->stride + p->x] = 30+64*i;
-                }
-            }
-            } */
+    //        printf("  %d %d %d %d\n", indices[0], indices[1], indices[2], indices[3]);
 
     unionfind_destroy(uf);
 

@@ -1,12 +1,10 @@
-/* (C) 2013-2016, The Regents of The University of Michigan
+/* Copyright (C) 2013-2016, The Regents of The University of Michigan.
 All rights reserved.
 
 This software was developed in the APRIL Robotics Lab under the
 direction of Edwin Olson, ebolson@umich.edu. This software may be
-available under alternative licensing terms; contact the address
-above.
+available under alternative licensing terms; contact the address above.
 
-   BSD
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
 
@@ -29,8 +27,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 The views and conclusions contained in the software and documentation are those
 of the authors and should not be interpreted as representing official policies,
-either expressed or implied, of the FreeBSD Project.
- */
+either expressed or implied, of the Regents of The University of Michigan.
+*/
 
 #define __USE_GNU
 #include <pthread.h>
@@ -205,28 +203,3 @@ void workerpool_run(workerpool_t *wp)
         workerpool_run_single(wp);
     }
 }
-
-/*
-int workerpool_get_nprocs()
-{
-    FILE * f = fopen("/proc/cpuinfo", "r");
-    size_t n = 0;
-    char * buf = NULL;
-
-    int nproc = 0;
-
-    while(getline(&buf, &n, f) != -1)
-    {
-        if(!str_starts_with(buf, "processor"))
-            continue;
-
-       int colon = str_indexof(buf, ":");
-
-       nproc = imax(nproc, atol(&buf[colon+1]));
-    }
-
-    free(buf);
-
-    return nproc;
-}
-*/

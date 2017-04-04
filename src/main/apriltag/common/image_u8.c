@@ -1,12 +1,10 @@
-/* (C) 2013-2016, The Regents of The University of Michigan
+/* Copyright (C) 2013-2016, The Regents of The University of Michigan.
 All rights reserved.
 
 This software was developed in the APRIL Robotics Lab under the
 direction of Edwin Olson, ebolson@umich.edu. This software may be
-available under alternative licensing terms; contact the address
-above.
+available under alternative licensing terms; contact the address above.
 
-   BSD
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
 
@@ -29,8 +27,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 The views and conclusions contained in the software and documentation are those
 of the authors and should not be interpreted as representing official policies,
-either expressed or implied, of the FreeBSD Project.
- */
+either expressed or implied, of the Regents of The University of Michigan.
+*/
 
 #include <assert.h>
 #include <stdio.h>
@@ -38,30 +36,29 @@ either expressed or implied, of the FreeBSD Project.
 #include <string.h>
 #include <math.h>
 
-#include "image_u8.h"
-#include "pnm.h"
+#include "common/image_u8.h"
+#include "common/pnm.h"
+#include "common/math_util.h"
 
 // least common multiple of 64 (sandy bridge cache line) and 24 (stride
 // needed for RGB in 8-wide vector processing)
-#define DEFAULT_ALIGNMENT 96
+#define DEFAULT_ALIGNMENT_U8 96
 
-static inline double sq(double v)
+image_u8_t *image_u8_create_stride(unsigned int width, unsigned int height, unsigned int stride)
 {
-    return v*v;
-}
+    uint8_t *buf = calloc(height*stride, sizeof(uint8_t));
 
-static int iclamp(int v, int min, int max)
-{
-    if (v < min)
-        return min;
-    if (v > max)
-        return max;
-    return v;
+    // const initializer
+    image_u8_t tmp = { .width = width, .height = height, .stride = stride, .buf = buf };
+
+    image_u8_t *im = calloc(1, sizeof(image_u8_t));
+    memcpy(im, &tmp, sizeof(image_u8_t));
+    return im;
 }
 
 image_u8_t *image_u8_create(unsigned int width, unsigned int height)
 {
-    return image_u8_create_alignment(width, height, DEFAULT_ALIGNMENT);
+    return image_u8_create_alignment(width, height, DEFAULT_ALIGNMENT_U8);
 }
 
 image_u8_t *image_u8_create_alignment(unsigned int width, unsigned int height, unsigned int alignment)
@@ -71,14 +68,7 @@ image_u8_t *image_u8_create_alignment(unsigned int width, unsigned int height, u
     if ((stride % alignment) != 0)
         stride += alignment - (stride % alignment);
 
-    uint8_t *buf = calloc(height*stride, sizeof(uint8_t));
-
-    // const initializer
-    image_u8_t tmp = { .width = width, .height = height, .stride = stride, .buf = buf };
-
-    image_u8_t *im = calloc(1, sizeof(image_u8_t));
-    memcpy(im, &tmp, sizeof(image_u8_t));
-    return im;
+    return image_u8_create_stride(width, height, stride);
 }
 
 image_u8_t *image_u8_copy(const image_u8_t *in)
@@ -107,7 +97,7 @@ void image_u8_destroy(image_u8_t *im)
 // PNM file i/o
 image_u8_t *image_u8_create_from_pnm(const char *path)
 {
-    return image_u8_create_from_pnm_alignment(path, DEFAULT_ALIGNMENT);
+    return image_u8_create_from_pnm_alignment(path, DEFAULT_ALIGNMENT_U8);
 }
 
 image_u8_t *image_u8_create_from_pnm_alignment(const char *path, int alignment)
@@ -122,8 +112,16 @@ image_u8_t *image_u8_create_from_pnm_alignment(const char *path, int alignment)
         case PNM_FORMAT_GRAY: {
             im = image_u8_create_alignment(pnm->width, pnm->height, alignment);
 
-            for (int y = 0; y < im->height; y++)
-                memcpy(&im->buf[y*im->stride], &pnm->buf[y*im->width], im->width);
+            if (pnm->max == 255) {
+                for (int y = 0; y < im->height; y++)
+                    memcpy(&im->buf[y*im->stride], &pnm->buf[y*im->width], im->width);
+            } else if (pnm->max == 65535) {
+                for (int y = 0; y < im->height; y++)
+                    for (int x = 0; x < im->width; x++)
+                        im->buf[y*im->stride + x] = pnm->buf[2*(y*im->width + x)];
+            } else {
+                assert(0);
+            }
 
             break;
         }
@@ -131,17 +129,31 @@ image_u8_t *image_u8_create_from_pnm_alignment(const char *path, int alignment)
         case PNM_FORMAT_RGB: {
             im = image_u8_create_alignment(pnm->width, pnm->height, alignment);
 
-            // Gray conversion for RGB is gray = (r + g + g + b)/4
-            for (int y = 0; y < im->height; y++) {
-                for (int x = 0; x < im->width; x++) {
-                    uint8_t gray = (pnm->buf[y*im->width*3 + 3*x+0] +    // r
-                                    pnm->buf[y*im->width*3 + 3*x+1] +    // g
-                                    pnm->buf[y*im->width*3 + 3*x+1] +    // g
-                                    pnm->buf[y*im->width*3 + 3*x+2])     // b
-                        / 4;
+            if (pnm->max == 255) {
+                // Gray conversion for RGB is gray = (r + g + g + b)/4
+                for (int y = 0; y < im->height; y++) {
+                    for (int x = 0; x < im->width; x++) {
+                        uint8_t gray = (pnm->buf[y*im->width*3 + 3*x+0] +    // r
+                                        pnm->buf[y*im->width*3 + 3*x+1] +    // g
+                                        pnm->buf[y*im->width*3 + 3*x+1] +    // g
+                                        pnm->buf[y*im->width*3 + 3*x+2])     // b
+                            / 4;
 
-                    im->buf[y*im->stride + x] = gray;
+                        im->buf[y*im->stride + x] = gray;
+                    }
                 }
+            } else if (pnm->max == 65535) {
+                for (int y = 0; y < im->height; y++) {
+                    for (int x = 0; x < im->width; x++) {
+                        int r = pnm->buf[6*(y*im->width + x) + 0];
+                        int g = pnm->buf[6*(y*im->width + x) + 2];
+                        int b = pnm->buf[6*(y*im->width + x) + 4];
+
+                        im->buf[y*im->stride + x] = (r + g + g + b) / 4;
+                    }
+                }
+            } else {
+                assert(0);
             }
 
             break;
@@ -254,7 +266,7 @@ void image_u8_draw_annulus(image_u8_t *im, float x0, float y0, float r0, float r
     }
 }
 
-// only widths 1 and 3 supported
+// only widths 1 and 3 supported (and 3 only badly)
 void image_u8_draw_line(image_u8_t *im, float x0, float y0, float x1, float y1, int v, int width)
 {
     double dist = sqrtf((y1-y0)*(y1-y0) + (x1-x0)*(x1-x0));
@@ -262,8 +274,8 @@ void image_u8_draw_line(image_u8_t *im, float x0, float y0, float x1, float y1, 
 
     // terrible line drawing code
     for (float f = 0; f <= 1; f += delta) {
-        int x = ((int) (x0*f + x1*(1-f)));
-        int y = ((int) (y0*f + y1*(1-f)));
+        int x = ((int) (x1 + (x0 - x1) * f));
+        int y = ((int) (y1 + (y0 - y1) * f));
 
         if (x < 0 || y < 0 || x >= im->width || y >= im->height)
             continue;
@@ -335,6 +347,9 @@ void image_u8_convolve_2D(image_u8_t *im, const uint8_t *k, int ksz)
 
 void image_u8_gaussian_blur(image_u8_t *im, double sigma, int ksz)
 {
+    if (sigma == 0)
+        return;
+
     assert((ksz & 1) == 1); // ksz must be odd.
 
     // build the kernel.

@@ -1,12 +1,10 @@
-/* (C) 2013-2016, The Regents of The University of Michigan
+/* Copyright (C) 2013-2016, The Regents of The University of Michigan.
 All rights reserved.
 
 This software was developed in the APRIL Robotics Lab under the
 direction of Edwin Olson, ebolson@umich.edu. This software may be
-available under alternative licensing terms; contact the address
-above.
+available under alternative licensing terms; contact the address above.
 
-   BSD
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
 
@@ -29,8 +27,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 The views and conclusions contained in the software and documentation are those
 of the authors and should not be interpreted as representing official policies,
-either expressed or implied, of the FreeBSD Project.
- */
+either expressed or implied, of the Regents of The University of Michigan.
+*/
 
 #include <stdlib.h>
 #include <math.h>
@@ -38,7 +36,8 @@ either expressed or implied, of the FreeBSD Project.
 
 struct timeutil_rest
 {
-    int64_t last_time;
+    int64_t acc_time;
+    int64_t start_time;
 };
 
 timeutil_rest_t *timeutil_rest_create()
@@ -83,7 +82,8 @@ void utime_to_timespec(int64_t v, struct timespec *ts)
 
 int32_t timeutil_usleep(int64_t useconds)
 {
-    // unistd.h function
+    // unistd.h function, but usleep is obsoleted in POSIX.1-2008.
+    // TODO: Eventually, rewrite this to use nanosleep
     return usleep(useconds);
 }
 
@@ -97,14 +97,39 @@ int32_t timeutil_sleep_hz(timeutil_rest_t *rest, double hz)
 {
     int64_t max_delay = 1000000L/hz;
     int64_t curr_time = utime_now();
-    int64_t diff = curr_time - rest->last_time;
+    int64_t diff = curr_time - rest->start_time;
     int64_t delay = max_delay - diff;
     if (delay < 0) delay = 0;
 
     int32_t ret = timeutil_usleep(delay);
-    rest->last_time = utime_now();
+    rest->start_time = utime_now();
 
     return ret;
+}
+
+void timeutil_timer_reset(timeutil_rest_t *rest)
+{
+    rest->start_time = utime_now();
+    rest->acc_time = 0;
+}
+
+void timeutil_timer_start(timeutil_rest_t *rest)
+{
+    rest->start_time = utime_now();
+}
+
+void timeutil_timer_stop(timeutil_rest_t *rest)
+{
+    int64_t curr_time = utime_now();
+    int64_t diff = curr_time - rest->start_time;
+
+    rest->acc_time += diff;
+}
+
+bool timeutil_timer_timeout(timeutil_rest_t *rest, double timeout_s)
+{
+    int64_t timeout_us = (int64_t)(1000000L*timeout_s);
+    return rest->acc_time > timeout_us;
 }
 
 int64_t time_util_hhmmss_ss_to_utime(double time)

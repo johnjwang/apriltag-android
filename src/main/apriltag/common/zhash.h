@@ -1,12 +1,10 @@
-/* (C) 2013-2016, The Regents of The University of Michigan
+/* Copyright (C) 2013-2016, The Regents of The University of Michigan.
 All rights reserved.
 
 This software was developed in the APRIL Robotics Lab under the
 direction of Edwin Olson, ebolson@umich.edu. This software may be
-available under alternative licensing terms; contact the address
-above.
+available under alternative licensing terms; contact the address above.
 
-   BSD
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
 
@@ -29,8 +27,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 The views and conclusions contained in the software and documentation are those
 of the authors and should not be interpreted as representing official policies,
-either expressed or implied, of the FreeBSD Project.
- */
+either expressed or implied, of the Regents of The University of Michigan.
+*/
 
 #ifndef _ZHASH_H
 #define _ZHASH_H
@@ -414,6 +412,26 @@ static inline char *zhash_str_str_get(zhash_t *zh, const char *key)
 
         zhash_destroy(zh);
     }
+
+
+static inline uint32_t zhash_int_hash(const void *_a)
+{
+    assert(_a != NULL);
+
+    uint32_t a = *((int*) _a);
+    return a;
+}
+
+static inline int zhash_int_equals(const void *_a, const void *_b)
+{
+    assert(_a != NULL);
+    assert(_b != NULL);
+
+    int a = *((int*) _a);
+    int b = *((int*) _b);
+
+    return a==b;
+}
 
 #ifdef __cplusplus
 }

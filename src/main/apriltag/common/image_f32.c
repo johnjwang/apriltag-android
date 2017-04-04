@@ -1,12 +1,10 @@
-/* (C) 2013-2016, The Regents of The University of Michigan
+/* Copyright (C) 2013-2016, The Regents of The University of Michigan.
 All rights reserved.
 
 This software was developed in the APRIL Robotics Lab under the
 direction of Edwin Olson, ebolson@umich.edu. This software may be
-available under alternative licensing terms; contact the address
-above.
+available under alternative licensing terms; contact the address above.
 
-   BSD
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
 
@@ -29,27 +27,45 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 The views and conclusions contained in the software and documentation are those
 of the authors and should not be interpreted as representing official policies,
-either expressed or implied, of the FreeBSD Project.
- */
+either expressed or implied, of the Regents of The University of Michigan.
+*/
 
-#include <stdio.h>
-#include <stdint.h>
-#include <stdlib.h>
+#include <assert.h>
 #include <math.h>
-#include "image_f32.h"
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 #include "math_util.h"
+
+#include "image_f32.h"
+
+
+static inline float sqf(float v)
+{
+    return v*v;
+}
+
+image_f32_t *image_f32_create_stride(int width, int height, int stride)
+{
+    float *buf = calloc(height * stride, sizeof(float));
+    // const initializer
+    image_f32_t tmp = { .width = width, .height = height, .stride = stride, .buf = buf };
+
+    image_f32_t *fim = (image_f32_t*) calloc(1, sizeof(image_f32_t));
+
+    memcpy(fim, &tmp, sizeof(image_f32_t));
+
+    return fim;
+}
 
 image_f32_t *image_f32_create(int width, int height)
 {
-    image_f32_t *fim = (image_f32_t*) calloc(1, sizeof(image_f32_t));
-
-    fim->width = width;
-    fim->height = height;
-    fim->stride = width; // XXX do better alignment
-
-    fim->buf = calloc(fim->height * fim->stride, sizeof(float));
-
-    return fim;
+    int stride = width;
+    while (stride & 7)
+        stride++;
+    return image_f32_create_stride(width, height, stride);
 }
 
 // scales by 1/255u
@@ -70,27 +86,7 @@ void image_f32_destroy(image_f32_t *im)
     free(im);
 }
 
-void image_f32_normalize(image_f32_t *im)
-{
-    float maxval = -INFINITY;
-    float minval = INFINITY;
-
-    for (int y = 0; y < im->height; y++) {
-        for (int x = 0; x < im->width; x++) {
-            maxval = max(maxval, im->buf[y*im->width+x]);
-            minval = min(maxval, im->buf[y*im->width+x]);
-        }
-    }
-
-    for (int y = 0; y < im->height; y++) {
-        for (int x = 0; x < im->width; x++) {
-            int idx = y*im->width+x;
-            im->buf[idx] = (im->buf[idx] - minval) / (maxval-minval);
-        }
-    }
-}
-
-static void convolve(const float *x, float *y, int sz, const double *k, int ksz)
+static void convolve(const float *x, float *y, int sz, const float *k, int ksz)
 {
     assert((ksz&1)==1);
 
@@ -98,7 +94,7 @@ static void convolve(const float *x, float *y, int sz, const double *k, int ksz)
         y[i] = x[i];
 
     for (int i = 0; i < sz - ksz; i++) {
-        double acc = 0.0;
+        float acc = 0;
 
         for (int j = 0; j < ksz; j++)
             acc += k[j]*x[i+j];
@@ -115,18 +111,18 @@ void image_f32_gaussian_blur(image_f32_t *im, double sigma, int ksz)
     assert((ksz & 1) == 1); // ksz must be odd.
 
     // build the kernel.
-    double k[ksz];
+    float k[ksz];
 
     // for kernel of length 5:
     // dk[0] = f(-2), dk[1] = f(-1), dk[2] = f(0), dk[3] = f(1), dk[4] = f(2)
     for (int i = 0; i < ksz; i++) {
         int x = -ksz/2 + i;
-        double v = exp(-.5*sq(x / sigma));
+        float v = exp(-.5*sqf(x / sigma));
         k[i] = v;
     }
 
     // normalize
-    double acc = 0;
+    float acc = 0;
     for (int i = 0; i < ksz; i++)
         acc += k[i];
 
@@ -135,7 +131,7 @@ void image_f32_gaussian_blur(image_f32_t *im, double sigma, int ksz)
 
     for (int y = 0; y < im->height; y++) {
         float x[im->stride];
-        memcpy(x, &im->buf[y*im->stride], im->stride*sizeof(float));
+        memcpy(x, &im->buf[y*im->stride], im->stride * sizeof(float));
         convolve(x, &im->buf[y*im->stride], im->width, k, ksz);
     }
 
@@ -151,4 +147,75 @@ void image_f32_gaussian_blur(image_f32_t *im, double sigma, int ksz)
         for (int y = 0; y < im->height; y++)
             im->buf[y*im->stride + x] = yb[y];
     }
+}
+
+// remap all values to [0, 1]
+void image_f32_normalize(image_f32_t *im)
+{
+    float min = HUGE, max = -HUGE;
+
+    for (int y = 0; y < im->height; y++) {
+        for (int x = 0; x < im->width; x++) {
+            float v = im->buf[y*im->stride + x];
+            if (v < min)
+                min = v;
+            if (v > max)
+                max = v;
+        }
+    }
+
+    if (min == max) {
+        for (int y = 0; y < im->height; y++) {
+            for (int x = 0; x < im->width; x++) {
+                im->buf[y*im->stride + x] = 0.5;
+            }
+        }
+    } else {
+
+        for (int y = 0; y < im->height; y++) {
+            for (int x = 0; x < im->width; x++) {
+                float v = im->buf[y*im->stride + x];
+
+                im->buf[y*im->stride + x] = (v - min) / (max - min);
+            }
+        }
+    }
+}
+
+// image is assumed to be [0, 1]
+int image_f32_write_pnm(const image_f32_t *im, const char *path)
+{
+    FILE *f = fopen(path, "wb");
+    int res = 0;
+
+    if (f == NULL) {
+        res = -1;
+        goto finish;
+    }
+
+    // Only outputs to grayscale
+    fprintf(f, "P5\n%d %d\n255\n", im->width, im->height);
+
+    for (int y = 0; y < im->height; y++) {
+        uint8_t line[im->width];
+        for (int x = 0; x < im->width; x++) {
+            float v = im->buf[y*im->stride + x];
+            if (v < 0)
+                v = 0;
+            if (v > 1)
+                v = 1;
+            line[x] = v * 255.0;
+        }
+
+        if (im->width != fwrite(line, 1, im->width, f)) {
+            res = -2;
+            goto finish;
+        }
+    }
+
+finish:
+    if (f != NULL)
+        fclose(f);
+
+    return res;
 }

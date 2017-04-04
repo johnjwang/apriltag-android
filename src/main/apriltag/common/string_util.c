@@ -1,12 +1,10 @@
-/* (C) 2013-2016, The Regents of The University of Michigan
+/* Copyright (C) 2013-2016, The Regents of The University of Michigan.
 All rights reserved.
 
 This software was developed in the APRIL Robotics Lab under the
 direction of Edwin Olson, ebolson@umich.edu. This software may be
-available under alternative licensing terms; contact the address
-above.
+available under alternative licensing terms; contact the address above.
 
-   BSD
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
 
@@ -29,8 +27,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 The views and conclusions contained in the software and documentation are those
 of the authors and should not be interpreted as representing official policies,
-either expressed or implied, of the FreeBSD Project.
- */
+either expressed or implied, of the Regents of The University of Michigan.
+*/
 
 #include <assert.h>
 #include <ctype.h>
@@ -187,6 +185,37 @@ zarray_t *str_split(const char *str, const char *delim)
 
     string_buffer_destroy(sb);
     return parts;
+}
+
+// split on one or more spaces.
+zarray_t *str_split_spaces(const char *str)
+{
+  zarray_t *parts = zarray_create(sizeof(char*));
+  size_t len = strlen(str);
+  size_t pos = 0;
+
+  while (pos < len) {
+
+    while (pos < len && str[pos] == ' ')
+      pos++;
+
+    // produce a token?
+    if (pos < len) {
+      // yes!
+      size_t off0 = pos;
+      while (pos < len && str[pos] != ' ')
+	pos++;
+      size_t off1 = pos;
+
+      size_t len = off1 - off0;
+      char *tok = malloc(len + 1);
+      memcpy(tok, &str[off0], len);
+      tok[len] = 0;
+      zarray_add(parts, &tok);
+    }
+  }
+
+  return parts;
 }
 
 void str_split_destroy(zarray_t *za)
@@ -473,7 +502,7 @@ char string_feeder_next(string_feeder_t *sf)
     return c;
 }
 
-char *string_feeder_next_length(string_feeder_t *sf, int length)
+char *string_feeder_next_length(string_feeder_t *sf, size_t length)
 {
     assert(sf != NULL);
     assert(length >= 0);
@@ -496,7 +525,7 @@ char string_feeder_peek(string_feeder_t *sf)
     return sf->s[sf->pos];
 }
 
-char *string_feeder_peek_length(string_feeder_t *sf, int length)
+char *string_feeder_peek_length(string_feeder_t *sf, size_t length)
 {
     assert(sf != NULL);
     assert(length >= 0);
@@ -709,8 +738,8 @@ static int is_variable_character(char c)
 
 char *str_expand_envs(const char *in)
 {
-    int inlen = strlen(in);
-    int inpos = 0;
+    size_t inlen = strlen(in);
+    size_t inpos = 0;
 
     char *out = NULL;
     int  outpos = 0;

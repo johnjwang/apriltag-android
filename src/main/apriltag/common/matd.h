@@ -1,12 +1,10 @@
-/* (C) 2013-2016, The Regents of The University of Michigan
+/* Copyright (C) 2013-2016, The Regents of The University of Michigan.
 All rights reserved.
 
 This software was developed in the APRIL Robotics Lab under the
 direction of Edwin Olson, ebolson@umich.edu. This software may be
-available under alternative licensing terms; contact the address
-above.
+available under alternative licensing terms; contact the address above.
 
-   BSD
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
 
@@ -29,8 +27,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 The views and conclusions contained in the software and documentation are those
 of the authors and should not be interpreted as representing official policies,
-either expressed or implied, of the FreeBSD Project.
- */
+either expressed or implied, of the Regents of The University of Michigan.
+*/
 
 #ifndef _MATD_H
 #define _MATD_H
@@ -52,7 +50,7 @@ extern "C" {
  */
 typedef struct
 {
-    int nrows, ncols;
+    unsigned int nrows, ncols;
     double data[];
 //    double *data;
 } matd_t;
@@ -399,8 +397,8 @@ typedef struct
     // flag is set to indicate that this has happened.
     int singular;
 
-    int *piv; // permutation indices
-    int pivsign;
+    unsigned int *piv; // permutation indices
+    int pivsign; // either +1 or -1
 
     // The matd_plu_t object returned "owns" the enclosed LU matrix. It
     // is not expected that the returned object is itself useful to

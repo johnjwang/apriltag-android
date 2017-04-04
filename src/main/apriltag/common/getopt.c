@@ -1,12 +1,10 @@
-/* (C) 2013-2016, The Regents of The University of Michigan
+/* Copyright (C) 2013-2016, The Regents of The University of Michigan.
 All rights reserved.
 
 This software was developed in the APRIL Robotics Lab under the
 direction of Edwin Olson, ebolson@umich.edu. This software may be
-available under alternative licensing terms; contact the address
-above.
+available under alternative licensing terms; contact the address above.
 
-   BSD
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
 
@@ -29,8 +27,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 The views and conclusions contained in the software and documentation are those
 of the authors and should not be interpreted as representing official policies,
-either expressed or implied, of the FreeBSD Project.
- */
+either expressed or implied, of the Regents of The University of Michigan.
+*/
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -42,6 +40,7 @@ either expressed or implied, of the FreeBSD Project.
 #include "zhash.h"
 #include "zarray.h"
 #include "getopt.h"
+#include "common/math_util.h"
 
 #define GOO_BOOL_TYPE 1
 #define GOO_STRING_TYPE 2
@@ -488,11 +487,6 @@ int getopt_was_specified(getopt_t *getopt, const char *lname)
 const zarray_t *getopt_get_extra_args(getopt_t *gopt)
 {
     return gopt->extraargs;
-}
-
-static int max(int a, int b)
-{
-    return a > b ? a : b;
 }
 
 void getopt_do_usage(getopt_t * gopt)

@@ -1,12 +1,10 @@
-/* (C) 2013-2016, The Regents of The University of Michigan
+/* Copyright (C) 2013-2016, The Regents of The University of Michigan.
 All rights reserved.
 
 This software was developed in the APRIL Robotics Lab under the
 direction of Edwin Olson, ebolson@umich.edu. This software may be
-available under alternative licensing terms; contact the address
-above.
+available under alternative licensing terms; contact the address above.
 
-   BSD
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
 
@@ -29,34 +27,29 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 The views and conclusions contained in the software and documentation are those
 of the authors and should not be interpreted as representing official policies,
-either expressed or implied, of the FreeBSD Project.
- */
+either expressed or implied, of the Regents of The University of Michigan.
+*/
 
 #ifndef _IMAGE_F32
 #define _IMAGE_F32
 
 #include <stdint.h>
-
-typedef struct image_f32 image_f32_t;
-
-struct image_f32
-{
-    int width, height;
-    int stride; // in units of floats
-
-    float *buf; // indexed as buf[y*stride + x]
-};
-
-#include "image_u8.h"
+#include "common/image_types.h"
 
 image_f32_t *image_f32_create(int width, int height);
+
+image_f32_t *image_f32_create_stride(int width, int height, int stride);
 
 image_f32_t *image_f32_create_from_u8(const image_u8_t *im);
 
 void image_f32_destroy(image_f32_t *im);
 
+void image_f32_gaussian_blur(image_f32_t *im, double sigma, int ksz);
+
+// remap all values to [0, 1]
 void image_f32_normalize(image_f32_t *im);
 
-void image_f32_gaussian_blur(image_f32_t *im, double sigma, int ksz);
+// image is assumed to be [0, 1]
+int image_f32_write_pnm(const image_f32_t *im, const char *path);
 
 #endif

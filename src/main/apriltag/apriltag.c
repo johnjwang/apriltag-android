@@ -1,12 +1,10 @@
-/* (C) 2013-2016, The Regents of The University of Michigan
+/* Copyright (C) 2013-2016, The Regents of The University of Michigan.
 All rights reserved.
 
 This software was developed in the APRIL Robotics Lab under the
 direction of Edwin Olson, ebolson@umich.edu. This software may be
-available under alternative licensing terms; contact the address
-above.
+available under alternative licensing terms; contact the address above.
 
-   BSD
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
 
@@ -29,8 +27,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 The views and conclusions contained in the software and documentation are those
 of the authors and should not be interpreted as representing official policies,
-either expressed or implied, of the FreeBSD Project.
- */
+either expressed or implied, of the Regents of The University of Michigan.
+*/
 
 #include "apriltag.h"
 
@@ -43,6 +41,7 @@ either expressed or implied, of the FreeBSD Project.
 #include <sys/time.h>
 
 #include "common/image_u8.h"
+#include "common/image_u8x3.h"
 #include "common/zhash.h"
 #include "common/zarray.h"
 #include "common/matd.h"
@@ -50,6 +49,9 @@ either expressed or implied, of the FreeBSD Project.
 #include "common/timeprofile.h"
 #include "common/math_util.h"
 #include "common/g2d.h"
+#include "common/floats.h"
+
+#include "apriltag_math.h"
 
 #include "common/postscript_utils.h"
 
@@ -59,6 +61,52 @@ either expressed or implied, of the FreeBSD Project.
 
 extern zarray_t *apriltag_quad_gradient(apriltag_detector_t *td, image_u8_t *im);
 extern zarray_t *apriltag_quad_thresh(apriltag_detector_t *td, image_u8_t *im);
+
+// Regresses a model of the form:
+// intensity(x,y) = C0*x + C1*y + CC2
+// The J matrix is the:
+//    J = [ x1 y1 1 ]
+//        [ x2 y2 1 ]
+//        [ ...     ]
+//  The A matrix is J'J
+
+struct graymodel
+{
+    double A[3][3];
+    double B[3];
+    double C[3];
+};
+
+void graymodel_init(struct graymodel *gm)
+{
+    memset(gm, 0, sizeof(struct graymodel));
+}
+
+void graymodel_add(struct graymodel *gm, double x, double y, double gray)
+{
+    // update upper right entries of A = J'J
+    gm->A[0][0] += x*x;
+    gm->A[0][1] += x*y;
+    gm->A[0][2] += x;
+    gm->A[1][1] += y*y;
+    gm->A[1][2] += y;
+    gm->A[2][2] += 1;
+
+    // update B = J'gray
+    gm->B[0] += x * gray;
+    gm->B[1] += y * gray;
+    gm->B[2] += gray;
+}
+
+void graymodel_solve(struct graymodel *gm)
+{
+    mat33_sym_solve((double*) gm->A, gm->B, gm->C);
+}
+
+double graymodel_interpolate(struct graymodel *gm, double x, double y)
+{
+    return gm->C[0]*x + gm->C[1]*y + gm->C[2];
+}
 
 struct quick_decode_entry
 {
@@ -308,10 +356,10 @@ apriltag_detector_t *apriltag_detector_create()
     td->qtp.max_nmaxima = 10;
     td->qtp.min_cluster_pixels = 5;
 
-    td->qtp.max_line_fit_mse = 1.0;
+    td->qtp.max_line_fit_mse = 10.0;
     td->qtp.critical_rad = 10 * M_PI / 180;
     td->qtp.deglitch = 0;
-    td->qtp.min_white_black_diff = 15;
+    td->qtp.min_white_black_diff = 5;
 
     td->tag_families = zarray_create(sizeof(apriltag_family_t*));
 
@@ -351,8 +399,7 @@ struct quad_decode_task
     image_u8_t *im;
     zarray_t *detections;
 
-    image_u8_t *im_gray_samples;
-    image_u8_t *im_decision;
+    image_u8_t *im_samples;
 };
 
 struct evaluate_quad_ret
@@ -373,10 +420,14 @@ int quad_update_homographies(struct quad *quad)
     for (int i = 0; i < 4; i++) {
         float corr[4];
 
-        // NOTE: y is reversed because our camera frame is x right y up,
-        // while the image pixels are ordered x right y down
+        // At this stage of the pipeline, we have not attempted to decode the
+        // quad into an oriented tag. Thus, just act as if the quad is facing
+        // "up" with respect to our desired corners. We'll fix the rotation
+        // later.
+        // [-1, -1], [1, -1], [1, 1], [-1, 1]
         corr[0] = (i==0 || i==3) ? -1 : 1;
-        corr[1] = (i==0 || i==1) ? 1 : -1;
+        corr[1] = (i==0 || i==1) ? -1 : 1;
+
         corr[2] = quad->p[i][0];
         corr[3] = quad->p[i][1];
 
@@ -512,8 +563,8 @@ double quad_goodness(apriltag_family_t *family, image_u8_t *im, struct quad *qua
     return margin;
 }
 
-// returns the decision margin.
-float quad_decode(apriltag_family_t *family, image_u8_t *im, struct quad *quad, struct quick_decode_entry *entry)
+// returns the decision margin. Return < 0 if the detection should be rejected.
+float quad_decode(apriltag_family_t *family, image_u8_t *im, struct quad *quad, struct quick_decode_entry *entry, image_u8_t *im_samples)
 {
     // decode the tag binary contents by sampling the pixel
     // closest to the center of each bit cell.
@@ -558,7 +609,7 @@ float quad_decode(apriltag_family_t *family, image_u8_t *im, struct quad *quad, 
         // top black row
         0.5, family->black_border / 2.0,
         1, 0,
-        1,
+        0,
 
         // bottom white row
         0.5, 2*family->black_border + family->d + white_border / 2.0,
@@ -573,20 +624,21 @@ float quad_decode(apriltag_family_t *family, image_u8_t *im, struct quad *quad, 
         // XXX double-counts the corners.
     };
 
-    float sums[2] = { 0, 0 };
-    float counts[2] = { 0, 0 };
+    struct graymodel whitemodel, blackmodel;
+    graymodel_init(&whitemodel);
+    graymodel_init(&blackmodel);
 
     for (int pattern_idx = 0; pattern_idx < sizeof(patterns)/(5*sizeof(float)); pattern_idx ++) {
         float *pattern = &patterns[pattern_idx * 5];
 
-        int sumidx = pattern[4];
+        int is_white = pattern[4];
 
         for (int i = 0; i < 2*family->black_border + family->d; i++) {
             double tagx01 = (pattern[0] + i*pattern[2]) / (2*family->black_border + family->d);
             double tagy01 = (pattern[1] + i*pattern[3]) / (2*family->black_border + family->d);
 
             double tagx = 2*(tagx01-0.5);
-            double tagy = -2*(tagy01-0.5);
+            double tagy = 2*(tagy01-0.5);
 
             double px, py;
             homography_project(quad->H, tagx, tagy, &px, &py);
@@ -599,12 +651,23 @@ float quad_decode(apriltag_family_t *family, image_u8_t *im, struct quad *quad, 
 
             int v = im->buf[iy*im->stride + ix];
 
-            sums[sumidx] += v;
-            counts[sumidx] ++;
+            if (im_samples) {
+                im_samples->buf[iy*im_samples->stride + ix] = (1-is_white)*255;
+            }
+
+            if (is_white)
+                graymodel_add(&whitemodel, tagx, tagy, v);
+            else
+                graymodel_add(&blackmodel, tagx, tagy, v);
         }
     }
 
-    float thresh = ((sums[0] / counts[0]) + (sums[1] / counts[1])) / 2.0;
+    graymodel_solve(&whitemodel);
+    graymodel_solve(&blackmodel);
+
+    // XXX Tunable
+    if (graymodel_interpolate(&whitemodel, 0, 0) - graymodel_interpolate(&blackmodel, 0, 0) < 0)
+        return -1;
 
     // compute the average decision margin (how far was each bit from
     // the decision boundary?
@@ -624,7 +687,7 @@ float quad_decode(apriltag_family_t *family, image_u8_t *im, struct quad *quad, 
 
         // scale to [-1, 1]
         double tagx = 2*(tagx01-0.5);
-        double tagy = -2*(tagy01-0.5);
+        double tagy = 2*(tagy01-0.5);
 
         double px, py;
         homography_project(quad->H, tagx, tagy, &px, &py);
@@ -640,6 +703,7 @@ float quad_decode(apriltag_family_t *family, image_u8_t *im, struct quad *quad, 
 
         int v = im->buf[iy*im->stride + ix];
 
+        double thresh = (graymodel_interpolate(&blackmodel, tagx, tagy) + graymodel_interpolate(&whitemodel, tagx, tagy)) / 2.0;
         if (v > thresh) {
             white_score += (v - thresh);
             white_score_count ++;
@@ -648,6 +712,9 @@ float quad_decode(apriltag_family_t *family, image_u8_t *im, struct quad *quad, 
             black_score += (thresh - v);
             black_score_count ++;
         }
+
+        if (im_samples)
+            im_samples->buf[iy*im_samples->stride + ix] = (1 - (rcode & 1)) * 255;
     }
 
     quick_decode_codeword(family, rcode, entry);
@@ -664,7 +731,7 @@ double score_decodability(apriltag_family_t *family, image_u8_t *im, struct quad
 {
     struct quick_decode_entry entry;
 
-    float decision_margin = quad_decode(family, im, quad, &entry);
+    float decision_margin = quad_decode(family, im, quad, &entry, NULL);
 
     // hamming trumps decision margin; maximum value for decision_margin is 255.
     return decision_margin - entry.hamming*1000;
@@ -790,7 +857,7 @@ static void refine_edges(apriltag_detector_t *td, image_u8_t *im_orig, struct qu
             // search on another pixel in the first place. Likewise,
             // for very small tags, we don't want the range to be too
             // big.
-            double range = fmin(td->quad_decimate + 1, mag / 10);
+            double range = td->quad_decimate + 1;
 
             // XXX tunable step size.
             for (double n = -range; n <= range; n +=  0.25) {
@@ -827,6 +894,9 @@ static void refine_edges(apriltag_detector_t *td, image_u8_t *im_orig, struct qu
             }
 
             // what was the average point along the line?
+            if (Mcount == 0)
+                continue;
+
             double n0 = Mn / Mcount;
 
             // where is the point along the line?
@@ -859,6 +929,7 @@ static void refine_edges(apriltag_detector_t *td, image_u8_t *im_orig, struct qu
 
     // now refit the corners of the quad
     for (int i = 0; i < 4; i++) {
+
         // solve for the intersection of lines (i) and (i+1)&3.
         double A00 =  lines[i][3],  A01 = -lines[(i+1)&3][3];
         double A10 =  -lines[i][2],  A11 = lines[(i+1)&3][2];
@@ -868,14 +939,18 @@ static void refine_edges(apriltag_detector_t *td, image_u8_t *im_orig, struct qu
         double det = A00 * A11 - A10 * A01;
 
         // inverse.
-        double W00 = A11 / det, W01 = -A01 / det;
         if (fabs(det) > 0.001) {
             // solve
+            double W00 = A11 / det, W01 = -A01 / det;
+
             double L0 = W00*B0 + W01*B1;
 
             // compute intersection
             quad->p[i][0] = lines[i][0] + L0*A00;
             quad->p[i][1] = lines[i][1] + L0*A10;
+        } else {
+            // this is a bad sign. We'll just keep the corner we had.
+//            printf("bad det: %15f %15f %15f %15f %15f\n", A00, A11, A10, A01, det);
         }
     }
 }
@@ -939,8 +1014,9 @@ static void quad_decode_task(void *_u)
 
             struct quick_decode_entry entry;
 
-            float decision_margin = quad_decode(family, im, quad, &entry);
-            if (entry.hamming < 255) {
+            float decision_margin = quad_decode(family, im, quad, &entry, task->im_samples);
+
+            if (entry.hamming < 255 && decision_margin >= 0) {
                 apriltag_detection_t *det = calloc(1, sizeof(apriltag_detection_t));
 
                 det->family = family;
@@ -952,6 +1028,7 @@ static void quad_decode_task(void *_u)
                 double theta = -entry.rotation * M_PI / 2.0;
                 double c = cos(theta), s = sin(theta);
 
+                // Fix the rotation of our homography to properly orient the tag
                 matd_t *R = matd_create(3,3);
                 MATD_EL(R, 0, 0) = c;
                 MATD_EL(R, 0, 1) = -s;
@@ -965,11 +1042,13 @@ static void quad_decode_task(void *_u)
 
                 homography_project(det->H, 0, 0, &det->c[0], &det->c[1]);
 
+                // [-1, -1], [1, -1], [1, 1], [-1, 1], Desired points
+                // [-1, 1], [1, 1], [1, -1], [-1, -1], FLIP Y
                 // adjust the points in det->p so that they correspond to
                 // counter-clockwise around the quad, starting at -1,-1.
                 for (int i = 0; i < 4; i++) {
-                    int tcx = (i == 0 || i == 3) ? -1 : 1;
-                    int tcy = (i < 2) ? -1 : 1;
+                    int tcx = (i == 1 || i == 2) ? 1 : -1;
+                    int tcy = (i < 2) ? 1 : -1;
 
                     double p[2];
 
@@ -996,6 +1075,20 @@ void apriltag_detection_destroy(apriltag_detection_t *det)
 
     matd_destroy(det->H);
     free(det);
+}
+
+int prefer_smaller(int pref, double q0, double q1)
+{
+    if (pref)     // already prefer something? exit.
+        return pref;
+
+    if (q0 < q1)
+        return -1; // we now prefer q0
+    if (q1 < q0)
+        return 1; // we now prefer q1
+
+    // no preference
+    return 0;
 }
 
 zarray_t *apriltag_detector_detect(apriltag_detector_t *td, image_u8_t *im_orig)
@@ -1127,10 +1220,7 @@ zarray_t *apriltag_detector_detect(apriltag_detector_t *td, image_u8_t *im_orig)
     ////////////////////////////////////////////////////////////////
     // Step 2. Decode tags from each quad.
     if (1) {
-        image_u8_t *im_gray_samples = td->debug ? image_u8_copy(im_orig) : NULL;
-
-        // im_decision debugging output is slow.
-        image_u8_t *im_decision = td->debug ? image_u8_copy(im_orig) : NULL;
+        image_u8_t *im_samples = td->debug ? image_u8_copy(im_orig) : NULL;
 
         int chunksize = 1 + zarray_size(quads) / (APRILTAG_TASKS_PER_THREAD_TARGET * td->nthreads);
 
@@ -1145,8 +1235,7 @@ zarray_t *apriltag_detector_detect(apriltag_detector_t *td, image_u8_t *im_orig)
             tasks[ntasks].im = im_orig;
             tasks[ntasks].detections = detections;
 
-            tasks[ntasks].im_gray_samples = im_gray_samples;
-            tasks[ntasks].im_decision = im_decision;
+            tasks[ntasks].im_samples = im_samples;
 
             workerpool_add_task(td->wp, quad_decode_task, &tasks[ntasks]);
             ntasks++;
@@ -1154,14 +1243,9 @@ zarray_t *apriltag_detector_detect(apriltag_detector_t *td, image_u8_t *im_orig)
 
         workerpool_run(td->wp);
 
-        if (im_gray_samples != NULL) {
-            image_u8_write_pnm(im_gray_samples, "debug_gray_samples.pnm");
-            image_u8_destroy(im_gray_samples);
-        }
-
-        if (im_decision != NULL) {
-            image_u8_write_pnm(im_decision, "debug_decision.pnm");
-            image_u8_destroy(im_decision);
+        if (im_samples != NULL) {
+            image_u8_write_pnm(im_samples, "debug_samples.pnm");
+            image_u8_destroy(im_samples);
         }
     }
 
@@ -1221,8 +1305,25 @@ zarray_t *apriltag_detector_detect(apriltag_detector_t *td, image_u8_t *im_orig)
                 if (g2d_polygon_overlaps_polygon(poly0, poly1)) {
                     // the tags overlap. Delete one, keep the other.
 
-                    if (det0->hamming < det1->hamming ||
-                        (det0->hamming == det1->hamming && det0->decision_margin > det1->decision_margin)) {
+                    int pref = 0; // 0 means undecided which one we'll keep.
+                    pref = prefer_smaller(pref, det0->hamming, det1->hamming);     // want small hamming
+                    pref = prefer_smaller(pref, -det0->decision_margin, -det1->decision_margin);      // want bigger margins
+                    pref = prefer_smaller(pref, -det0->goodness, -det1->goodness); // want bigger goodness
+
+                    // if we STILL don't prefer one detection over the other, then pick
+                    // any deterministic criterion.
+                    for (int i = 0; i < 4; i++) {
+                        pref = prefer_smaller(pref, det0->p[i][0], det1->p[i][0]);
+                        pref = prefer_smaller(pref, det0->p[i][1], det1->p[i][1]);
+                    }
+
+                    if (pref == 0) {
+                        // at this point, we should only be undecided if the tag detections
+                        // are *exactly* the same. How would that happen?
+                        printf("uh oh, no preference for overlappingdetection\n");
+                    }
+
+                    if (pref < 0) {
                         // keep det0, destroy det1
                         apriltag_detection_destroy(det1);
                         zarray_remove_index(detections, i1, 1);
@@ -1266,7 +1367,66 @@ zarray_t *apriltag_detector_detect(apriltag_detector_t *td, image_u8_t *im_orig)
         fprintf(f, "1 -1 scale\n");
         postscript_image(f, darker);
 
+        image_u8_destroy(darker);
+
+        for (int i = 0; i < zarray_size(detections); i++) {
+            apriltag_detection_t *det;
+            zarray_get(detections, i, &det);
+
+            float rgb[3];
+            int bias = 100;
+
+            for (int i = 0; i < 3; i++)
+                rgb[i] = bias + (random() % (255-bias));
+
+            fprintf(f, "%f %f %f setrgbcolor\n", rgb[0]/255.0f, rgb[1]/255.0f, rgb[2]/255.0f);
+            fprintf(f, "%f %f moveto %f %f lineto %f %f lineto %f %f lineto %f %f lineto stroke\n",
+                    det->p[0][0], det->p[0][1],
+                    det->p[1][0], det->p[1][1],
+                    det->p[2][0], det->p[2][1],
+                    det->p[3][0], det->p[3][1],
+                    det->p[0][0], det->p[0][1]);
+        }
+
+        fprintf(f, "showpage\n");
         fclose(f);
+    }
+
+    if (td->debug) {
+        image_u8_t *darker = image_u8_copy(im_orig);
+        image_u8_darken(darker);
+        image_u8_darken(darker);
+
+        image_u8x3_t *out = image_u8x3_create(darker->width, darker->height);
+        for (int y = 0; y < im_orig->height; y++) {
+            for (int x = 0; x < im_orig->width; x++) {
+                out->buf[y*out->stride + 3*x + 0] = darker->buf[y*darker->stride + x];
+                out->buf[y*out->stride + 3*x + 1] = darker->buf[y*darker->stride + x];
+                out->buf[y*out->stride + 3*x + 2] = darker->buf[y*darker->stride + x];
+            }
+        }
+
+        for (int i = 0; i < zarray_size(detections); i++) {
+            apriltag_detection_t *det;
+            zarray_get(detections, i, &det);
+
+            float rgb[3];
+            int bias = 100;
+
+            for (int i = 0; i < 3; i++)
+                rgb[i] = bias + (random() % (255-bias));
+
+            for (int j = 0; j < 4; j++) {
+                int k = (j + 1) & 3;
+                image_u8x3_draw_line(out,
+                                     det->p[j][0], det->p[j][1], det->p[k][0], det->p[k][1],
+                                     (uint8_t[]) { rgb[0], rgb[1], rgb[2] },
+                                     1);
+            }
+        }
+
+        image_u8x3_write_pnm(out, "debug_output.pnm");
+        image_u8x3_destroy(out);
     }
 
     // deallocate
@@ -1274,17 +1434,19 @@ zarray_t *apriltag_detector_detect(apriltag_detector_t *td, image_u8_t *im_orig)
         FILE *f = fopen("debug_quads.ps", "w");
         fprintf(f, "%%!PS\n\n");
 
-        image_u8_t *im = image_u8_copy(im_orig);
-        image_u8_darken(im);
-        image_u8_darken(im);
+        image_u8_t *darker = image_u8_copy(im_orig);
+        image_u8_darken(darker);
+        image_u8_darken(darker);
 
         // assume letter, which is 612x792 points.
-        double scale = fmin(612.0/im->width, 792.0/im->height);
+        double scale = fmin(612.0/darker->width, 792.0/darker->height);
         fprintf(f, "%f %f scale\n", scale, scale);
-        fprintf(f, "0 %d translate\n", im->height);
+        fprintf(f, "0 %d translate\n", darker->height);
         fprintf(f, "1 -1 scale\n");
 
-        postscript_image(f, im);
+        postscript_image(f, darker);
+
+        image_u8_destroy(darker);
 
         for (int i = 0; i < zarray_size(quads); i++) {
             struct quad *q;
@@ -1305,6 +1467,7 @@ zarray_t *apriltag_detector_detect(apriltag_detector_t *td, image_u8_t *im_orig)
                     q->p[0][0], q->p[0][1]);
         }
 
+        fprintf(f, "showpage\n");
         fclose(f);
     }
 

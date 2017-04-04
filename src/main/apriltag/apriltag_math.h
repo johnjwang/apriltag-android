@@ -30,44 +30,80 @@ of the authors and should not be interpreted as representing official policies,
 either expressed or implied, of the Regents of The University of Michigan.
 */
 
-#ifndef _TIME_UTIL_H
-#define _TIME_UTIL_H
+#ifndef _APRILTAG_MATH_H
+#define _APRILTAG_MATH_H
 
-#include <stdbool.h>
-#include <stdint.h>
-#include <sys/time.h>
-#include <time.h>
-#include <unistd.h>
+#include <math.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+// Computes the cholesky factorization of A, putting the lower
+// triangular matrix into R.
+static inline void mat33_chol(const double *A,
+                              double *R)
+{
+    // A[0] = R[0]*R[0]
+    R[0] = sqrt(A[0]);
 
-typedef struct timeutil_rest timeutil_rest_t;
-timeutil_rest_t *timeutil_rest_create();
-void timeutil_rest_destroy(timeutil_rest_t * rest);
+    // A[1] = R[0]*R[3];
+    R[3] = A[1] / R[0];
 
-int64_t utime_now(); // blacklist-ignore
-int64_t utime_get_seconds(int64_t v);
-int64_t utime_get_useconds(int64_t v);
-void    utime_to_timeval(int64_t v, struct timeval *tv);
-void    utime_to_timespec(int64_t v, struct timespec *ts);
+    // A[2] = R[0]*R[6];
+    R[6] = A[2] / R[0];
 
-int32_t  timeutil_usleep(int64_t useconds);
-uint32_t timeutil_sleep(unsigned int seconds);
-int32_t  timeutil_sleep_hz(timeutil_rest_t *rest, double hz);
+    // A[4] = R[3]*R[3] + R[4]*R[4]
+    R[4] = sqrt(A[4] - R[3]*R[3]);
 
-void timeutil_timer_reset(timeutil_rest_t *rest);
-void timeutil_timer_start(timeutil_rest_t *rest);
-void timeutil_timer_stop(timeutil_rest_t *rest);
-bool timeutil_timer_timeout(timeutil_rest_t *rest, double timeout_s);
+    // A[5] = R[3]*R[6] + R[4]*R[7]
+    R[7] = (A[5] - R[3]*R[6]) / R[4];
 
-int64_t time_util_hhmmss_ss_to_utime(double time);
+    // A[8] = R[6]*R[6] + R[7]*R[7] + R[8]*R[8]
+    R[8] = sqrt(A[8] - R[6]*R[6] - R[7]*R[7]);
 
-
-
-#ifdef __cplusplus
+    R[1] = 0;
+    R[2] = 0;
+    R[5] = 0;
 }
-#endif
+
+static inline void mat33_lower_tri_inv(const double *A,
+                                       double *R)
+{
+    // A[0]*R[0] = 1
+    R[0] = 1 / A[0];
+
+    // A[3]*R[0] + A[4]*R[3] = 0
+    R[3] = -A[3]*R[0] / A[4];
+
+    // A[4]*R[4] = 1
+    R[4] = 1 / A[4];
+
+    // A[6]*R[0] + A[7]*R[3] + A[8]*R[6] = 0
+    R[6] = (-A[6]*R[0] - A[7]*R[3]) / A[8];
+
+    // A[7]*R[4] + A[8]*R[7] = 0
+    R[7] = -A[7]*R[4] / A[8];
+
+    // A[8]*R[8] = 1
+    R[8] = 1 / A[8];
+}
+
+
+static inline void mat33_sym_solve(const double *A,
+                                   const double *B,
+                                   double *R)
+{
+    double L[9];
+    mat33_chol(A, L);
+
+    double M[9];
+    mat33_lower_tri_inv(L, M);
+
+    double tmp[3];
+    tmp[0] = M[0]*B[0];
+    tmp[1] = M[3]*B[0] + M[4]*B[1];
+    tmp[2] = M[6]*B[0] + M[7]*B[1] + M[8]*B[2];
+
+    R[0] = M[0]*tmp[0] + M[3]*tmp[1] + M[6]*tmp[2];
+    R[1] = M[4]*tmp[1] + M[7]*tmp[2];
+    R[2] = M[8]*tmp[2];
+}
 
 #endif
