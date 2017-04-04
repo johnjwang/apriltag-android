@@ -1,8 +1,0 @@
-This repository is the <root>/app directory of the project. To create a project
-and use this source,
-
-    1) Create a new project in Android Studio,
-    2) Remove the <root>/app directory,
-    3) Clone this repository and move it to be <root>/app.
-
-Resolve any build errors (notably installing CMake, updating Gradle, etc).
