@@ -85,6 +85,8 @@ public class CameraActivity extends AppCompatActivity {
 
         if (camera != null) {
             tagView.setCamera(null);
+            camera.stopPreview();
+            camera.setPreviewCallback(null);
             camera.release();
             camera = null;
         }
@@ -104,7 +106,7 @@ public class CameraActivity extends AppCompatActivity {
         // Re-initialize the Apriltag detector as settings may have changed
         verifyPreferences();
         SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
-        double decimation = Double.parseDouble(sharedPreferences.getString("decimation_list", "1"));
+        double decimation = Double.parseDouble(sharedPreferences.getString("decimation_list", "4"));
         double sigma = Double.parseDouble(sharedPreferences.getString("sigma_value", "0"));
         int nthreads = Integer.parseInt(sharedPreferences.getString("nthreads_value", "0"));
         String tagFamily = sharedPreferences.getString("tag_family_list", "tag36h11");

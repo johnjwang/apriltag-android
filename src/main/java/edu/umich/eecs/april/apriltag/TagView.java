@@ -11,6 +11,7 @@ import android.opengl.Matrix;
 import android.util.Log;
 import android.view.SurfaceHolder;
 
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -395,7 +396,7 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
         }
 
         public void onDrawFrame(GL10 gl) {
-            //Log.i(TAG, "draw frame");
+            Log.i(TAG, "draw frame");
 
             // Redraw background color
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
@@ -452,7 +453,7 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
         if (mCamera != null) {
             try {
                 mCamera.stopPreview();
-                //Log.i(TAG, "Camera stop");
+                Log.i(TAG, "Camera stop");
             } catch (Exception e) { }
         }
 
@@ -485,7 +486,7 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
             }
             camera.setPreviewCallbackWithBuffer(this);
             camera.startPreview();
-            //Log.i(TAG, "Camera start");
+            Log.i(TAG, "Camera start");
         }
         mCamera = camera;
     }
@@ -505,7 +506,23 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
         parameters.setPreviewSize(bestSize.width, bestSize.height);
         Log.i(TAG, "Setting " + bestSize.width + " x " + bestSize.height);
 
-        parameters.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO);
+        List<String> focusModes = parameters.getSupportedFocusModes();
+        if (focusModes.contains(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO)) {
+            parameters.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO);
+            Log.i(TAG, "Setting focus mode for continuous video");
+        } else {
+            Log.i(TAG, "Focus mode for continuous video not supported, skipping");
+        }
+
+        List<int[]> fpsRanges = parameters.getSupportedPreviewFpsRange();
+        for (int[] range : fpsRanges) {
+            Log.i(TAG, "[" + range[0] + ", " + range[1] + "]");
+            if (range[0] == 30000 && range[1] == 30000) {
+                parameters.setPreviewFpsRange(30000, 30000);
+                break;
+            }
+        }
+
         camera.setParameters(parameters);
     }
 
@@ -524,13 +541,14 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
     private int frameCount;
     public void onPreviewFrame(byte[] bytes, Camera camera) {
         frameCount += 1;
-        //Log.i(TAG, "frame count: " + frameCount);
+        Log.i(TAG, "frame count: " + frameCount);
 
         // Check if mCamera has been released in another thread
         if (this.mCamera == null)
             return;
 
         // Spin up another thread so we don't block the UI thread
+
         ProcessingThread thread = new ProcessingThread();
         thread.bytes = bytes;
         thread.width = mPreviewSize.width;
@@ -538,11 +556,13 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
         thread.parent = this;
         thread.run();
 
+
+
         // Pass bytes to apriltag via JNI, get mDetections back
-        //long start = System.currentTimeMillis();
-        //mDetections = ApriltagNative.apriltag_detect_yuv(bytes, mPreviewSize.width, mPreviewSize.height);
-        //long diff = System.currentTimeMillis() - start;
-        //Log.i(TAG, "tag mDetections took " + diff + " ms");
+        long start = System.currentTimeMillis();
+        mDetections = ApriltagNative.apriltag_detect_yuv(bytes, mPreviewSize.width, mPreviewSize.height);
+        long diff = System.currentTimeMillis() - start;
+        Log.i(TAG, "detecting " + mDetections.size() + " tags took " + diff + " ms");
 
         // Render YUV image in OpenGL
         //requestRender();
@@ -580,6 +600,7 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
         p.setColor(0xffffffff);
         canvas.drawText(Integer.toString(frameCount), 100, 100, p);
         overlay.unlockCanvasAndPost(canvas);
-        //*/
+        */
+
     }
 }
