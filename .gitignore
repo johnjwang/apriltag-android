@@ -12,3 +12,7 @@
 build/
 .externalNativeBuild/
 *.iml
+
+.idea/
+.cxx/
+.gradle/

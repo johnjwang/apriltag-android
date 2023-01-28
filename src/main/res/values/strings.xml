@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">AprilTag</string>
+    <string name="app_name">AprilTag Detector</string>
 
     <string name="help">Help</string>
     <string name="settings">Settings</string>
@@ -28,6 +28,7 @@
         <item>2</item>
         <item>3</item>
         <item>4</item>
+        <item>8</item>
     </string-array>
     <string-array name="pref_decimation_list_values">
         <item>1</item>
@@ -35,6 +36,7 @@
         <item>2</item>
         <item>3</item>
         <item>4</item>
+        <item>8</item>
     </string-array>
 
     <string name="pref_title_sigma">Gaussian blur (sigma, in pixels)</string>
