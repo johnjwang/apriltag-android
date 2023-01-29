@@ -5,19 +5,13 @@
 [._]*.sw[a-p]
 [._]sw[a-p]
 
-# default Android Studio ignore
-*.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
+# Android Studio files
 .DS_Store
+*.iml
+/.cxx
+/.externalNativeBuild
+/.gradle
+/.idea
 /build
 /captures
-.externalNativeBuild
-.cxx
-local.properties
+/local.properties
