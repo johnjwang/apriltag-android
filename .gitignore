@@ -8,6 +8,7 @@
 # Android Studio files
 .DS_Store
 *.iml
+
 /.cxx
 /.externalNativeBuild
 /.gradle
@@ -15,3 +16,4 @@
 /build
 /captures
 /local.properties
+/release
