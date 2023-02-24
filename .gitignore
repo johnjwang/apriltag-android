@@ -16,3 +16,4 @@ build/
 .idea/
 .cxx/
 .gradle/
+*.aab

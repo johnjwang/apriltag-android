@@ -8,8 +8,11 @@ import android.opengl.GLES11Ext;
 import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
 import android.opengl.Matrix;
+import android.os.Bundle;
+import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.SurfaceHolder;
+import android.view.SurfaceView;
 
 
 import java.io.IOException;
@@ -18,7 +21,15 @@ import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
@@ -459,7 +470,7 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
 
         // Start the new mCamera preview
         if (camera != null) {
-            setHighestCameraPreviewResolution(camera);
+            setCameraParameters(camera);
 
             // Ensure space for frame (12 bits per pixel)
             mPreviewSize = camera.getParameters().getPreviewSize();
@@ -491,18 +502,17 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
         mCamera = camera;
     }
 
-    private void setHighestCameraPreviewResolution(Camera camera)
+    private void setCameraParameters(Camera camera)
     {
         Camera.Parameters parameters = camera.getParameters();
-        List<Camera.Size> sizeList = camera.getParameters().getSupportedPreviewSizes();
 
+        List<Camera.Size> sizeList = camera.getParameters().getSupportedPreviewSizes();
         Camera.Size bestSize = sizeList.get(0);
         for (int i = 1; i < sizeList.size(); i++){
             if ((sizeList.get(i).width * sizeList.get(i).height) > (bestSize.width * bestSize.height)){
                 bestSize = sizeList.get(i);
             }
         }
-
         parameters.setPreviewSize(bestSize.width, bestSize.height);
         Log.i(TAG, "Setting " + bestSize.width + " x " + bestSize.height);
 
@@ -514,11 +524,14 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
             Log.i(TAG, "Focus mode for continuous video not supported, skipping");
         }
 
+        int[] desiredFpsRange = new int[] { 30000, 30000 };
         List<int[]> fpsRanges = parameters.getSupportedPreviewFpsRange();
+        Log.i(TAG, "Supported FPS ranges:");
         for (int[] range : fpsRanges) {
-            Log.i(TAG, "[" + range[0] + ", " + range[1] + "]");
-            if (range[0] == 30000 && range[1] == 30000) {
-                parameters.setPreviewFpsRange(30000, 30000);
+            Log.i(TAG, "  [" + range[0] + ", " + range[1] + "]");
+            if (range[0] == desiredFpsRange[0] && range[1] == desiredFpsRange[1]) {
+                parameters.setPreviewFpsRange(range[0], range[1]);
+                Log.i(TAG, "Setting FPS range [" + range[0] + ", " + range[1] + "]");
                 break;
             }
         }
@@ -526,19 +539,31 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
         camera.setParameters(parameters);
     }
 
-    static class ProcessingThread extends Thread {
-        byte[] bytes;
-        int width;
-        int height;
-        TagView parent;
+    public class CameraPreviewThread extends Thread {
+        private final SurfaceHolder mSurfaceHolder;
+        private final Camera mCamera;
 
+        public CameraPreviewThread(SurfaceHolder surfaceHolder, Camera camera) {
+            mSurfaceHolder = surfaceHolder;
+            mCamera = camera;
+        }
+
+        @Override
         public void run() {
-            parent.mDetections = ApriltagNative.apriltag_detect_yuv(bytes, width, height);
-            parent.requestRender();
+            try {
+                mCamera.setPreviewDisplay(mSurfaceHolder);
+                mCamera.startPreview();
+            } catch (IOException e) {
+                Log.e(TAG, "Error setting camera preview: " + e.getMessage());
+            }
         }
     }
 
+    private ExecutorService mExecutor = Executors.newFixedThreadPool(2);
+    private LinkedBlockingDeque<Future<?>> mQueue = new LinkedBlockingDeque<>(5);
     private int frameCount;
+    private long last_end = System.currentTimeMillis();
+
     public void onPreviewFrame(byte[] bytes, Camera camera) {
         frameCount += 1;
         Log.i(TAG, "frame count: " + frameCount);
@@ -547,60 +572,39 @@ public class TagView extends GLSurfaceView implements Camera.PreviewCallback {
         if (this.mCamera == null)
             return;
 
-        // Spin up another thread so we don't block the UI thread
-
-        ProcessingThread thread = new ProcessingThread();
-        thread.bytes = bytes;
-        thread.width = mPreviewSize.width;
-        thread.height = mPreviewSize.height;
-        thread.parent = this;
-        thread.run();
-
-
-
-        // Pass bytes to apriltag via JNI, get mDetections back
+        // Submit the work to the thread pool
         long start = System.currentTimeMillis();
-        mDetections = ApriltagNative.apriltag_detect_yuv(bytes, mPreviewSize.width, mPreviewSize.height);
-        long diff = System.currentTimeMillis() - start;
-        Log.i(TAG, "detecting " + mDetections.size() + " tags took " + diff + " ms");
 
-        // Render YUV image in OpenGL
-        //requestRender();
+        Future<?> future = mExecutor.submit(() -> {
+            long thread_start = System.currentTimeMillis();
+            mDetections = ApriltagNative.apriltag_detect_yuv(bytes, mPreviewSize.width, mPreviewSize.height);
+            requestRender();
+            long thread_diff = System.currentTimeMillis() - thread_start;
+            double rate = thread_diff > 0 ? 1000.0 / thread_diff : 0.0;
+            int numDetections = mDetections != null ? mDetections.size() : -1;
+            Log.i(TAG, String.valueOf(mDetections));
+            Log.i(TAG, "detecting " + numDetections + " tags took " + thread_diff + " ms (" + String.format("%.1f", rate) + " Hz)");
+        });
 
-        /*
-        // Render mDetections
-        // TODO do this in OpenGL so frames are synced up properly
-        Canvas canvas = overlay.lockCanvas();
-        canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.SRC);
+        mQueue.removeIf(candidate -> candidate.isDone() || candidate.isCancelled());
 
-        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
-        p.setStrokeWidth(5.0f);
-        p.setTextSize(50);
-        for (ApriltagDetection det : mDetections) {
-            //Log.i(TAG, "Tag detected " + det.id);
-
-            // The XY swap is due to portrait mode weirdness
-            // The mCamera image is 1920x1080 but the portrait bitmap is 1080x1920
-            p.setARGB(0xff, 0, 0xff, 0);
-            canvas.drawLine(mPreviewSize.height-(float)det.p[1], (float)det.p[0],
-                            mPreviewSize.height-(float)det.p[3], (float)det.p[2], p);
-            p.setARGB(0xff, 0xff, 0, 0);
-            canvas.drawLine(mPreviewSize.height-(float)det.p[1], (float)det.p[0],
-                            mPreviewSize.height-(float)det.p[7], (float)det.p[6], p);
-            p.setARGB(0xff, 0, 0, 0xff);
-            canvas.drawLine(mPreviewSize.height-(float)det.p[3], (float)det.p[2],
-                            mPreviewSize.height-(float)det.p[5], (float)det.p[4], p);
-            canvas.drawLine(mPreviewSize.height-(float)det.p[5], (float)det.p[4],
-                            mPreviewSize.height-(float)det.p[7], (float)det.p[6], p);
-            p.setARGB(0xff, 0, 0x99, 0xff);
-            canvas.drawText(Integer.toString(det.id),
-                            mPreviewSize.height-(float)det.c[1], (float)det.c[0], p);
+        Log.i(TAG, "Thread queue length: " + mQueue.size());
+        // Add the task to the queue and remove the oldest task if the queue is full
+        if (!mQueue.offer(future)) {
+            Log.i(TAG, "Queue full, trying to make room");
+            Future<?> newest = mQueue.pollLast();
+            newest.cancel(true);
+            if (!mQueue.offer(future)) {
+                Log.e(TAG, "Unable to dequeue and offer a new task, cancelling new task");
+                future.cancel(true);
+            }
         }
 
-        p.setColor(0xffffffff);
-        canvas.drawText(Integer.toString(frameCount), 100, 100, p);
-        overlay.unlockCanvasAndPost(canvas);
-        */
+        Log.i(TAG, "Thread dispatch took " + (System.currentTimeMillis() - start) + " ms");
 
+        long full_diff = System.currentTimeMillis() - last_end;
+        double full_rate = full_diff > 0 ? 1000.0 / full_diff : 0.0;
+        Log.i(TAG, "full cycle took " + full_diff + " ms (" + String.format("%.1f", full_rate) + " Hz)");
+        last_end = System.currentTimeMillis();
     }
 }
