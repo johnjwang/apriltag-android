@@ -16,3 +16,9 @@ To build this app you will need
 In Android Studio:
     1) Open a project at the root of this repository,
     2) Build the target and ensure the process succeeds.
+
+## Testing
+
+To facilitate testing, it is useful to have a virtual emulated scene
+with tags present. Follow [these instructions](https://developers.google.com/ar/develop/java/emulator#move_the_virtual_camera)
+to add a picture of your choice to the virtual scene.

@@ -4,6 +4,8 @@ import android.Manifest;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.graphics.Color;
+import android.graphics.Typeface;
 import android.hardware.Camera;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
@@ -12,20 +14,25 @@ import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
+import android.util.TypedValue;
 import android.view.Menu;
 import android.view.MenuItem;
-import android.view.MenuInflater;
 import android.view.SurfaceView;
+import android.view.TextureView;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
+import android.widget.TextView;
+
 
 /**
  * An example full-screen activity that shows and hides the system UI (i.e.
  * status bar and navigation/system bar) with user interaction.
  */
-public class CameraActivity extends AppCompatActivity {
+
+public class AprilTagDetectorActivity extends AppCompatActivity {
     private static final String TAG = "AprilTag";
-    private Camera camera;
+    private DetectionThread mDetectionThread;
+    private CameraPreviewThread mCameraPreviewThread;
     private TagView tagView;
 
     private static final int MY_PERMISSIONS_REQUEST_CAMERA = 77;
@@ -47,6 +54,14 @@ public class CameraActivity extends AppCompatActivity {
 
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        setContentView(R.layout.main);
+
+        // Add toolbar/actionbar
+        Toolbar myToolbar = (Toolbar) findViewById(R.id.toolbar);
+        setSupportActionBar(myToolbar);
+
+        // Make the screen stay awake
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
         // Ensure we have permission to use the camera (Permission Requesting for Android 6.0/SDK 23 and higher)
         if (ContextCompat.checkSelfPermission(this,
@@ -58,100 +73,93 @@ public class CameraActivity extends AppCompatActivity {
         } else {
             this.has_camera_permissions = 1;
         }
+    }
 
-        setContentView(R.layout.main);
-
-        SurfaceView overlayView = new SurfaceView(this);
-        tagView = new TagView(this, overlayView.getHolder());
-        FrameLayout layout = (FrameLayout) findViewById(R.id.tag_view);
-        //layout.addView(overlayView); // TODO: Not needed?
-        layout.addView(tagView);
-
-        // Add toolbar/actionbar
-        Toolbar myToolbar = (Toolbar) findViewById(R.id.toolbar);
-        setSupportActionBar(myToolbar);
-
-        // Make the screen stay awake
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        cleanup();
+        Log.i(TAG, "Finished destroying.");
     }
 
     /** Release the camera when application focus is lost */
     protected void onPause() {
         super.onPause();
-        tagView.onPause();
+        cleanup();
+        Log.i(TAG, "Finished pause.");
+    }
 
-        //Log.i(TAG, "Pause");
-        // TODO move camera management to TagView class
-
-        if (camera != null) {
-            tagView.setCamera(null);
-            camera.stopPreview();
-            camera.setPreviewCallback(null);
-            camera.release();
-            camera = null;
+    private void cleanup() {
+        if (mCameraPreviewThread != null) {
+            mCameraPreviewThread.interrupt();
+            mCameraPreviewThread.destroy();
+            try {
+                mCameraPreviewThread.join();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            mCameraPreviewThread = null;
+        }
+        if (mDetectionThread != null) {
+            mDetectionThread.interrupt();
+            mDetectionThread.destroy();
+            try {
+                mDetectionThread.join();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            mDetectionThread = null;
         }
     }
 
     /** (Re-)initialize the camera */
     protected void onResume() {
         super.onResume();
-        tagView.onResume();
 
+        // Check permissions
         if (this.has_camera_permissions == 0) {
+            Log.w(TAG, "Missing camera permissions.");
             return;
         }
 
-        //Log.i(TAG, "Resume");
-
+        // DETECTION INIT
         // Re-initialize the Apriltag detector as settings may have changed
         verifyPreferences();
         SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
-        double decimation = Double.parseDouble(sharedPreferences.getString("decimation_list", "4"));
+        double decimation = Double.parseDouble(sharedPreferences.getString("decimation_list", "8"));
         double sigma = Double.parseDouble(sharedPreferences.getString("sigma_value", "0"));
-        int nthreads = Integer.parseInt(sharedPreferences.getString("nthreads_value", "0"));
+        int nthreads = Integer.parseInt(sharedPreferences.getString("nthreads_value", "4"));
         String tagFamily = sharedPreferences.getString("tag_family_list", "tag36h11");
-        boolean useRear = true;
-        Log.i(TAG, String.format("decimation: %f | sigma: %f | nthreads: %d | tagFamily: %s | useRear: %b",
-                decimation, sigma, nthreads, tagFamily, useRear));
+        Log.i(TAG, String.format("decimation: %f | sigma: %f | nthreads: %d | tagFamily: %s",
+                decimation, sigma, nthreads, tagFamily));
         ApriltagNative.apriltag_init(tagFamily, 2, decimation, sigma, nthreads);
 
-        // Find the camera index of front or rear camera
-        int camidx = 0;
-        Camera.CameraInfo info = new Camera.CameraInfo();
-        for (int i = 0; i < Camera.getNumberOfCameras(); i += 1) {
-            Camera.getCameraInfo(i, info);
-            int desiredFacing = useRear ? Camera.CameraInfo.CAMERA_FACING_BACK :
-                    Camera.CameraInfo.CAMERA_FACING_FRONT;
-            if (info.facing == desiredFacing) {
-                camidx = i;
-                break;
-            }
-        }
+        // THREAD INIT
+        // Start the detection process on a separate thread
+        TextureView detectionSurface = (TextureView) findViewById(R.id.tagView);
+        TextView detectionFpsTextView = (TextView) findViewById(R.id.detectionFpsTextView);
+        stylizeText(detectionFpsTextView);
+        mDetectionThread = new DetectionThread(detectionSurface, detectionFpsTextView);
+        mDetectionThread.initialize();
+        mDetectionThread.start();
 
-        Camera.getCameraInfo(camidx, info);
-        Log.i(TAG, "using camera " + camidx);
-        Log.i(TAG, "camera rotation: " + info.orientation);
-
-        try {
-            camera = Camera.open(camidx);
-        } catch (Exception e) {
-            Log.d(TAG, "Couldn't open camera: " + e.getMessage());
-            return;
-        }
-
-        Log.i(TAG, "supported resolutions:");
-        Camera.Parameters params = camera.getParameters();
-        for (Camera.Size s : params.getSupportedPreviewSizes()) {
-            Log.i(TAG, " " + s.width + "x" + s.height);
-        }
-
-        tagView.setCamera(camera);
+        // Start the camera preview on a separate thread
+        SurfaceView previewSurface = (SurfaceView) findViewById(R.id.surfaceView);
+        TextView previewFpsTextView = (TextView) findViewById(R.id.previewFpsTextView);
+        stylizeText(previewFpsTextView);
+        mCameraPreviewThread = new CameraPreviewThread(previewSurface.getHolder(), mDetectionThread, previewFpsTextView);
+        mCameraPreviewThread.initialize();
+        mCameraPreviewThread.start();
     }
 
+    private void stylizeText(TextView textView) {
+        textView.setTextColor(Color.GREEN);
+        textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        textView.setTypeface(textView.getTypeface(), Typeface.BOLD);
+    }
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
-        MenuInflater inflater = getMenuInflater();
-        inflater.inflate(R.menu.main_menu, menu);
+        getMenuInflater().inflate(R.menu.main_menu, menu);
         return true;
     }
 
