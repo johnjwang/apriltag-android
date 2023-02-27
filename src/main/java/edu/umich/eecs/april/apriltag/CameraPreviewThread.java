@@ -6,8 +6,17 @@ import android.view.SurfaceHolder;
 import android.widget.TextView;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
+/**
+
+ This class is responsible for managing the camera and live preview. It also enqueues image previews
+ in the DetectionThread for asynchronous Apriltag detection on a separate view.
+ <p>
+ This class also displays a text view with the current frames per second (FPS) of the camera thread.
+ </p>
+ */
 public class CameraPreviewThread extends Thread {
     private static final String TAG = "CameraPreviewThread";
 
@@ -25,21 +34,15 @@ public class CameraPreviewThread extends Thread {
                 mCamera.setPreviewDisplay(holder);
 
                 // Set the preview callback to receive camera frames asynchronously
-                mCamera.setPreviewCallback(new Camera.PreviewCallback() {
-                    @Override
-                    public void onPreviewFrame(byte[] data, Camera camera) {
-                        previewCallback();
-
-                        try {
-                            mDetectionThread.enqueueCameraFrame(data, camera.getParameters().getPreviewSize());
-                        } catch (InterruptedException e) {
-                            Log.e(TAG, "Interrupted while enqueuing camera frame: " + e.getMessage());
-                        }
-
-
+                mCamera.setPreviewCallback((data, camera) -> {
+                    try {
+                        mDetectionThread.enqueueCameraFrame(data, camera.getParameters().getPreviewSize());
+                    } catch (InterruptedException e) {
+                        Log.e(TAG, "Interrupted while enqueuing camera frame: " + e.getMessage());
                     }
-                });
 
+                    previewFpsCallback();
+                });
 
                 mCamera.startPreview();
             } catch (IOException e) {
@@ -49,19 +52,14 @@ public class CameraPreviewThread extends Thread {
 
         @Override
         public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-            // do nothing
+            // Do nothing
         }
 
         @Override
         public void surfaceDestroyed(SurfaceHolder holder) {
-            // do nothing
+            // Do nothing
         }
     };
-
-    public void destroy() {
-        mSurfaceHolder.removeCallback(mCallback);
-    }
-
 
     public CameraPreviewThread(SurfaceHolder surfaceHolder, DetectionThread detectionThread, TextView fpsTextView) {
         mSurfaceHolder = surfaceHolder;
@@ -71,13 +69,19 @@ public class CameraPreviewThread extends Thread {
         mSurfaceHolder.addCallback(mCallback);
     }
 
-    private void previewCallback() {
+    public void destroy() {
+        mSurfaceHolder.removeCallback(mCallback);
+        mCamera.release();
+        mCamera = null;
+    }
+
+    private void previewFpsCallback() {
         long now = System.currentTimeMillis();
         long diff = now - mLastRender;
         mFrameCount++;
         if (diff >= 1000) {
             double fps = 1000.0 / diff * mFrameCount;
-            mFpsTextView.setText(String.format("%.2f fps", fps));
+            mFpsTextView.setText(String.format("%.2f fps Camera", fps));
             mLastRender = now;
             mFrameCount = 0;
         }
@@ -154,7 +158,6 @@ public class CameraPreviewThread extends Thread {
             Log.i(TAG, "Focus mode for continuous video not supported, skipping");
         }
 
-        //int[] desiredFpsRange = new int[] { 30000, 30000 };
         int[] desiredFpsRange = new int[] { 15000, 15000 };
         List<int[]> fpsRanges = parameters.getSupportedPreviewFpsRange();
         Log.i(TAG, "Supported FPS ranges:");

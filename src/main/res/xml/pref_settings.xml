@@ -39,6 +39,12 @@
             android:negativeButtonText="@null"
             android:positiveButtonText="@null"
             android:title="@string/pref_title_tag_family" />
+
+        <SwitchPreference
+            android:key="diagnostics_enabled"
+            android:title="Enable Diagnostics"
+            android:summary="Enable additional stats and diagnostics."
+            android:defaultValue="false" />
     </PreferenceCategory>
 
 </PreferenceScreen>

@@ -6,7 +6,6 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.Typeface;
-import android.hardware.Camera;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.support.v4.app.ActivityCompat;
@@ -19,8 +18,8 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.SurfaceView;
 import android.view.TextureView;
+import android.view.View;
 import android.view.WindowManager;
-import android.widget.FrameLayout;
 import android.widget.TextView;
 
 
@@ -29,11 +28,10 @@ import android.widget.TextView;
  * status bar and navigation/system bar) with user interaction.
  */
 
-public class AprilTagDetectorActivity extends AppCompatActivity {
+public class ApriltagDetectorActivity extends AppCompatActivity {
     private static final String TAG = "AprilTag";
     private DetectionThread mDetectionThread;
     private CameraPreviewThread mCameraPreviewThread;
-    private TagView tagView;
 
     private static final int MY_PERMISSIONS_REQUEST_CAMERA = 77;
     private int has_camera_permissions = 0;
@@ -75,21 +73,22 @@ public class AprilTagDetectorActivity extends AppCompatActivity {
         }
     }
 
+    /** Release the camera when the application is exited */
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        cleanup();
+        stopThreads();
         Log.i(TAG, "Finished destroying.");
     }
 
     /** Release the camera when application focus is lost */
     protected void onPause() {
         super.onPause();
-        cleanup();
+        stopThreads();
         Log.i(TAG, "Finished pause.");
     }
 
-    private void cleanup() {
+    private void stopThreads() {
         if (mCameraPreviewThread != null) {
             mCameraPreviewThread.interrupt();
             mCameraPreviewThread.destroy();
@@ -129,10 +128,18 @@ public class AprilTagDetectorActivity extends AppCompatActivity {
         double decimation = Double.parseDouble(sharedPreferences.getString("decimation_list", "8"));
         double sigma = Double.parseDouble(sharedPreferences.getString("sigma_value", "0"));
         int nthreads = Integer.parseInt(sharedPreferences.getString("nthreads_value", "4"));
+        boolean diagnosticsEnabled = sharedPreferences.getBoolean("diagnostics_enabled", false);
         String tagFamily = sharedPreferences.getString("tag_family_list", "tag36h11");
         Log.i(TAG, String.format("decimation: %f | sigma: %f | nthreads: %d | tagFamily: %s",
                 decimation, sigma, nthreads, tagFamily));
         ApriltagNative.apriltag_init(tagFamily, 2, decimation, sigma, nthreads);
+
+        // DIAGNOSTICS
+        findViewById(R.id.detectionFpsTextView).setVisibility(diagnosticsEnabled ? View.VISIBLE : View.INVISIBLE);
+        findViewById(R.id.previewFpsTextView).setVisibility(diagnosticsEnabled ? View.VISIBLE : View.INVISIBLE);
+        TextView tagFamilyText = (TextView) findViewById(R.id.tagFamily);
+        stylizeText(tagFamilyText);
+        tagFamilyText.setText("Tag Family: " + tagFamily.substring(3));
 
         // THREAD INIT
         // Start the detection process on a separate thread
@@ -200,12 +207,6 @@ public class AprilTagDetectorActivity extends AppCompatActivity {
 
                     // Set flag
                     this.has_camera_permissions = 1;
-
-                    // Restart the TagViewer
-                    SurfaceView overlayView = new SurfaceView(this);
-                    tagView = new TagView(this, overlayView.getHolder());
-                    FrameLayout layout = (FrameLayout) findViewById(R.id.tag_view);
-                    layout.addView(tagView);
 
                     // Restart the camera
                     onPause();
