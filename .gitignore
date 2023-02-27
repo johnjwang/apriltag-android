@@ -1,19 +1,20 @@
-# ignore emacs backup files
+# ignore emacs and vim backup files
 *~
 \#*\#
 .\#*
+[._]*.sw[a-p]
+[._]sw[a-p]
 
-# ignore vim backup files
-*.swp
-*.swo
-[#]*[#]
-.#*
-
-build/
-.externalNativeBuild/
+# Android Studio files
+.DS_Store
 *.iml
-
-.idea/
-.cxx/
-.gradle/
 *.aab
+
+/.cxx
+/.externalNativeBuild
+/.gradle
+/.idea
+/build
+/captures
+/local.properties
+/release

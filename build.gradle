@@ -7,13 +7,13 @@ ext {
 
 
 android {
-    compileSdk 24
+    compileSdk 33
     namespace 'edu.umich.eecs.april.apriltag'
 
     defaultConfig {
         applicationId "edu.umich.eecs.april.apriltag"
         minSdkVersion 14
-        targetSdkVersion 24
+        targetSdkVersion 33
         versionCode 10
         versionName "1.0"
     }
