@@ -28,7 +28,11 @@
         <item>2</item>
         <item>3</item>
         <item>4</item>
-        <item>8</item>
+        <item>8 (default)</item>
+        <item>16</item>
+        <item>32</item>
+        <item>64</item>
+        <item>128</item>
     </string-array>
     <string-array name="pref_decimation_list_values">
         <item>1</item>
@@ -37,6 +41,10 @@
         <item>3</item>
         <item>4</item>
         <item>8</item>
+        <item>16</item>
+        <item>32</item>
+        <item>64</item>
+        <item>128</item>
     </string-array>
 
     <string name="pref_title_sigma">Gaussian blur (sigma, in pixels)</string>
@@ -60,25 +68,4 @@
         <item>tag25h7</item>
         <item>tag16h5</item>
     </string-array>
-
-    <string name="pref_title_camera_facing">Camera</string>
-    <string-array name="pref_camera_facing_list_titles">
-        <item>Rear (default)</item>
-        <item>Front</item>
-    </string-array>
-    <string-array name="pref_camera_facing_list_values">
-        <item>1</item>
-        <item>0</item>
-    </string-array>
-
-    <string name="pref_title_camera_resolution">Camera resolution</string>
-    <string-array name="pref_camera_resolution_titles">
-        <item>1920 x 1080</item>
-        <item>720 x 480</item>
-    </string-array>
-    <string-array name="pref_camera_resolution_values">
-        <item>1080</item>
-        <item>480</item>
-    </string-array>
-
 </resources>

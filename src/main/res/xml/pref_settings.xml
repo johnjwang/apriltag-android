@@ -3,31 +3,9 @@
     <PreferenceCategory
         android:title="AprilTag Processing"
         android:key="pref_cat_processing">
-    <!--
-<SwitchPreference
-    android:visibility="invisible"
-    android:defaultValue="false"
-    android:key="refine_edges_switch"
-    android:summary="@string/pref_description_refine_edges"
-    android:title="@string/pref_title_refine_edges" />
-
-<SwitchPreference
-    android:visibility="gone"
-    android:defaultValue="false"
-    android:key="refine_decode_switch"
-    android:summary="@string/pref_description_refine_decode"
-    android:title="@string/pref_title_refine_decode" />
-
-<SwitchPreference
-    android:visibility="gone"
-    android:defaultValue="false"
-    android:key="refine_pose_switch"
-    android:summary="@string/pref_description_refine_pose"
-    android:title="@string/pref_title_refine_pose" />
-    -->
 
         <ListPreference
-            android:defaultValue="1"
+            android:defaultValue="8"
             android:entries="@array/pref_decimation_list_titles"
             android:entryValues="@array/pref_decimation_list_values"
             android:key="decimation_list"
@@ -61,42 +39,12 @@
             android:negativeButtonText="@null"
             android:positiveButtonText="@null"
             android:title="@string/pref_title_tag_family" />
+
+        <SwitchPreference
+            android:key="diagnostics_enabled"
+            android:title="Enable Diagnostics"
+            android:summary="Enable additional stats and diagnostics."
+            android:defaultValue="false" />
     </PreferenceCategory>
-
-    <PreferenceCategory
-        android:title="Camera Settings"
-        android:key="pref_cat_camera">
-
-        <ListPreference
-            android:defaultValue="1"
-            android:entries="@array/pref_camera_facing_list_titles"
-            android:entryValues="@array/pref_camera_facing_list_values"
-            android:key="device_settings_camera_facing"
-            android:negativeButtonText="@null"
-            android:positiveButtonText="@null"
-            android:title="@string/pref_title_camera_facing" />
-        <!--
-            <ListPreference
-                android:id="@+id/camera_resolution"
-                android:defaultValue="1080"
-                android:entries="@array/pref_camera_resolution_titles"
-                android:entryValues="@array/pref_camera_resolution_values"
-                android:key="camera_resolution"
-                android:negativeButtonText="@null"
-                android:positiveButtonText="@null"
-                android:title="@string/pref_title_camera_resolution" />
-        -->
-
-    </PreferenceCategory>
-
-    <!--
-    <PreferenceCategory
-        android:title="Other">
-
-        // Reset settings
-        // Toggle light/dark theme
-
-    </PreferenceCategory>
-    -->
 
 </PreferenceScreen>
