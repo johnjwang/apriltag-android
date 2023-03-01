@@ -8,6 +8,11 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
+
+import androidx.camera.core.CameraSelector;
+import androidx.camera.core.Preview;
+import androidx.camera.lifecycle.ProcessCameraProvider;
+import androidx.camera.view.PreviewView;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.appcompat.app.AppCompatActivity;
@@ -21,6 +26,10 @@ import android.view.TextureView;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.TextView;
+
+import com.google.common.util.concurrent.ListenableFuture;
+
+import java.util.concurrent.ExecutionException;
 
 
 /**
@@ -50,9 +59,27 @@ public class ApriltagDetectorActivity extends AppCompatActivity {
         }
     }
 
+    private void startCamera() {
+        ListenableFuture<ProcessCameraProvider> providerFuture = ProcessCameraProvider.getInstance(this);
+        providerFuture.addListener(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    ProcessCameraProvider provider = providerFuture.get();
+                    Preview preview = new Preview.Builder().build();
+                    CameraSelector selector = new CameraSelector.Builder().requireLensFacing(CameraSelector.LENS_FACING_BACK).build();
+                    PreviewView previewView = findViewById(R.id.viewFinder);
+                    preview.setSurfaceProvider(previewView.getSurfaceProvider());
+
+                    provider.bindToLifecycle(ApriltagDetectorActivity.this, selector, preview);
+                } catch (ExecutionException | InterruptedException e) {}
+            }
+        }, getMainExecutor());
+    }
+
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.main);
+        setContentView(R.layout.detector_activity);
 
         // Add toolbar/actionbar
         Toolbar myToolbar = (Toolbar) findViewById(R.id.toolbar);
@@ -70,6 +97,7 @@ public class ApriltagDetectorActivity extends AppCompatActivity {
                     MY_PERMISSIONS_REQUEST_CAMERA);
         } else {
             this.has_camera_permissions = 1;
+            startCamera();
         }
     }
 
@@ -112,6 +140,7 @@ public class ApriltagDetectorActivity extends AppCompatActivity {
     }
 
     /** (Re-)initialize the camera */
+    /*
     protected void onResume() {
         super.onResume();
 
@@ -158,6 +187,7 @@ public class ApriltagDetectorActivity extends AppCompatActivity {
         mCameraPreviewThread.initialize();
         mCameraPreviewThread.start();
     }
+//*/
 
     private void stylizeText(TextView textView) {
         textView.setTextColor(Color.GREEN);
