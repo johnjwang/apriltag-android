@@ -3,6 +3,7 @@ package edu.umich.eecs.april.apriltag;
 import android.graphics.Bitmap;
 import android.util.Log;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 
 /**
@@ -21,6 +22,6 @@ public class ApriltagNative {
 
     public static native void apriltag_init(String tagFamily, int errorBits, double decimateFactor,
                                             double blurSigma, int nthreads);
-
-    public static native ArrayList<ApriltagDetection> apriltag_detect_yuv(byte[] src, int width, int height);
+    
+    public static native ArrayList<ApriltagDetection> apriltag_detect_yuv(ByteBuffer src, int width, int height, int stride);
 }

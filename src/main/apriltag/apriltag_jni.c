@@ -200,7 +200,7 @@ JNIEXPORT void JNICALL Java_edu_umich_eecs_april_apriltag_ApriltagNative_aprilta
  * Signature: ([BII)Ljava/util/ArrayList;
  */
 JNIEXPORT jobject JNICALL Java_edu_umich_eecs_april_apriltag_ApriltagNative_apriltag_1detect_1yuv
-        (JNIEnv *env, jclass cls, jbyteArray _buf, jint width, jint height) {
+        (JNIEnv *env, jclass cls, jobject buf, jint width, jint height, jint stride) {
     // If not initialized, init with default settings
     if (!state.td) {
         state.tf = tag36h11_create();
@@ -215,15 +215,13 @@ JNIEXPORT jobject JNICALL Java_edu_umich_eecs_april_apriltag_ApriltagNative_apri
 
     // Use the luma channel (the first width*height elements)
     // as grayscale input image
-    jbyte *buf = (*env)->GetByteArrayElements(env, _buf, NULL);
     image_u8_t im = {
-            .buf = (uint8_t*)buf,
+            .buf = (uint8_t*)(*env)->GetDirectBufferAddress(env, buf),
             .height = height,
             .width = width,
-            .stride = width
+            .stride = stride,
     };
     zarray_t *detections = apriltag_detector_detect(state.td, &im);
-    (*env)->ReleaseByteArrayElements(env, _buf, buf, 0);
 
     // al = new ArrayList();
     jobject al = (*env)->NewObject(env, state.al_cls, state.al_constructor);
@@ -254,3 +252,4 @@ JNIEXPORT jobject JNICALL Java_edu_umich_eecs_april_apriltag_ApriltagNative_apri
 
     return al;
 }
+

@@ -104,12 +104,15 @@ public class DetectionThread extends Thread {
     }
 
     private ArrayList<ApriltagDetection> processCameraFrame(byte[] data, Camera.Size cameraSize)  {
+        return null;
+        /*
         try {
             return ApriltagNative.apriltag_detect_yuv(data, cameraSize.width, cameraSize.height);
         } catch (Exception e) {
             Log.e(TAG, "Unhandled exception when detecting tags: " + e);
             return new ArrayList<>();
         }
+        */
     }
 
     private void renderDetection(ApriltagDetection detection, Canvas canvas) {
