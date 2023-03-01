@@ -1,8 +1,17 @@
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android" >
 
     <PreferenceCategory
-        android:title="AprilTag Processing"
+        android:title="Processing"
         android:key="pref_cat_processing">
+
+        <ListPreference
+            android:defaultValue="tag36h11"
+            android:entries="@array/pref_tag_family_list_titles"
+            android:entryValues="@array/pref_tag_family_list_values"
+            android:key="tag_family_list"
+            android:negativeButtonText="@null"
+            android:positiveButtonText="@null"
+            android:title="@string/pref_title_tag_family" />
 
         <ListPreference
             android:defaultValue="8"
@@ -23,6 +32,16 @@
             android:title="@string/pref_title_sigma" />
 
         <EditTextPreference
+            android:key="max_hamming_error"
+            android:title="Max Hamming Error"
+            android:summary="Maximum Hamming distance allowed for tag detection"
+            android:dialogTitle="Max Hamming Error"
+            android:defaultValue="0"
+            android:inputType="number"
+            android:selectAllOnFocus="true"
+            android:singleLine="true"/>
+
+        <EditTextPreference
             android:defaultValue="@string/pref_default_nthreads"
             android:inputType="number"
             android:key="nthreads_value"
@@ -30,15 +49,11 @@
             android:selectAllOnFocus="true"
             android:singleLine="true"
             android:title="@string/pref_title_nthreads"/>
+    </PreferenceCategory>
 
-        <ListPreference
-            android:defaultValue="tag36h11"
-            android:entries="@array/pref_tag_family_list_titles"
-            android:entryValues="@array/pref_tag_family_list_values"
-            android:key="tag_family_list"
-            android:negativeButtonText="@null"
-            android:positiveButtonText="@null"
-            android:title="@string/pref_title_tag_family" />
+    <PreferenceCategory
+        android:title="Diagnostics"
+        android:key="pref_cat_diagnostics">
 
         <SwitchPreference
             android:key="diagnostics_enabled"
