@@ -13,9 +13,9 @@
         android:title="@string/about" />
     <item android:id="@+id/screenshot"
         android:title="@string/screenshot" />
--->
     <item android:id="@+id/reset"
         android:icon="@drawable/ic_restore_white_24dp"
         app:showAsAction="ifRoom"
         android:title="@string/reset" />
+-->
 </menu>

@@ -12,7 +12,7 @@
             android:src="@mipmap/april_lab"
             android:paddingLeft="10dp"
             android:theme="@style/Widget.MyApp.Toolbar.Solid"/>
-        <android.support.v7.widget.Toolbar
+        <androidx.appcompat.widget.Toolbar
             xmlns:android="http://schemas.android.com/apk/res/android"
             xmlns:app="http://schemas.android.com/apk/res-auto"
             android:id="@+id/toolbar"
@@ -30,8 +30,8 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" >
 
-        <SurfaceView
-            android:id="@+id/surfaceView"
+        <androidx.camera.view.PreviewView
+            android:id="@+id/viewFinder"
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
 
@@ -56,16 +56,9 @@
                 android:text="tag36h11" />
 
             <TextView
-                android:id="@+id/previewFpsTextView"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="N/A fps" />
-
-            <TextView
                 android:id="@+id/detectionFpsTextView"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_below="@id/previewFpsTextView"
                 android:text="N/A fps" />
         </RelativeLayout>
 

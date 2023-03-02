@@ -5,7 +5,7 @@
         android:key="pref_cat_processing">
 
         <ListPreference
-            android:defaultValue="8"
+            android:defaultValue="2"
             android:entries="@array/pref_decimation_list_titles"
             android:entryValues="@array/pref_decimation_list_values"
             android:key="decimation_list"
