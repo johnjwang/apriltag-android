@@ -56,16 +56,9 @@
                 android:text="tag36h11" />
 
             <TextView
-                android:id="@+id/previewFpsTextView"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="N/A fps" />
-
-            <TextView
                 android:id="@+id/detectionFpsTextView"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_below="@id/previewFpsTextView"
                 android:text="N/A fps" />
         </RelativeLayout>
 

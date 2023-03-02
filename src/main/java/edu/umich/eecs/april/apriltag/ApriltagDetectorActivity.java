@@ -11,11 +11,20 @@ import android.graphics.Path;
 import android.graphics.PointF;
 import android.graphics.PorterDuff;
 import android.graphics.Typeface;
-import android.media.Image;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
+import android.util.Log;
+import android.util.TypedValue;
+import android.view.Menu;
+import android.view.MenuItem;
+import android.view.TextureView;
+import android.view.View;
+import android.view.WindowManager;
+import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.Toolbar;
 import androidx.camera.core.CameraSelector;
 import androidx.camera.core.ImageAnalysis;
 import androidx.camera.core.ImageProxy;
@@ -27,19 +36,6 @@ import androidx.camera.view.transform.ImageProxyTransformFactory;
 import androidx.camera.view.transform.OutputTransform;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.appcompat.widget.Toolbar;
-
-import android.util.Log;
-import android.util.Size;
-import android.util.TypedValue;
-import android.view.Menu;
-import android.view.MenuItem;
-import android.view.SurfaceView;
-import android.view.TextureView;
-import android.view.View;
-import android.view.WindowManager;
-import android.widget.TextView;
 
 import com.google.common.util.concurrent.ListenableFuture;
 
@@ -48,24 +44,75 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-
-/**
- * An example full-screen activity that shows and hides the system UI (i.e.
- * status bar and navigation/system bar) with user interaction.
- */
-
 public class ApriltagDetectorActivity extends AppCompatActivity {
     private static final String TAG = "AprilTag";
-    private DetectionThread mDetectionThread;
-    private CameraPreviewThread mCameraPreviewThread;
+    private static final int MY_PERMISSIONS_REQUEST_CAMERA = 77;
 
     private ExecutorService detectorExecutor;
     private TextureView tagView;
+    private TextView detectionFpsTextView;
     private OutputTransform previewViewTransform;
 
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.main);
 
-    private static final int MY_PERMISSIONS_REQUEST_CAMERA = 77;
-    private int has_camera_permissions = 0;
+        // Add toolbar/actionbar
+        Toolbar myToolbar = (Toolbar) findViewById(R.id.toolbar);
+        setSupportActionBar(myToolbar);
+
+        tagView = findViewById(R.id.tagView);
+        detectionFpsTextView = (TextView) findViewById(R.id.detectionFpsTextView);
+
+        // Make the screen stay awake
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
+        // Create a thread for the detector
+        detectorExecutor = Executors.newSingleThreadExecutor();
+
+        // Ensure we have permission to use the camera (Permission Requesting for Android 6.0/SDK 23 and higher)
+        if (ContextCompat.checkSelfPermission(this,
+                Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            // Assume user knows enough about the app to know why we need the camera, just ask for permission
+            ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.CAMERA},
+                    MY_PERMISSIONS_REQUEST_CAMERA);
+        } else {
+            startCamera();
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        detectorExecutor.shutdown();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+
+        // Re-initialize the Apriltag detector as settings may have changed
+        verifyPreferences();
+        SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
+        double decimation = Double.parseDouble(sharedPreferences.getString("decimation_list", "2"));
+        double sigma = Double.parseDouble(sharedPreferences.getString("sigma_value", "0"));
+        int nthreads = Integer.parseInt(sharedPreferences.getString("nthreads_value", "4"));
+        boolean diagnosticsEnabled = sharedPreferences.getBoolean("diagnostics_enabled", false);
+        String tagFamily = sharedPreferences.getString("tag_family_list", "tag36h11");
+        Log.i(TAG, String.format("decimation: %f | sigma: %f | nthreads: %d | tagFamily: %s",
+                decimation, sigma, nthreads, tagFamily));
+        ApriltagNative.apriltag_init(tagFamily, 2, decimation, sigma, nthreads);
+
+        // Update diagnostics text
+        detectionFpsTextView.setVisibility(diagnosticsEnabled ? View.VISIBLE : View.INVISIBLE);
+        stylizeText(detectionFpsTextView);
+
+        TextView tagFamilyText = (TextView) findViewById(R.id.tagFamily);
+        stylizeText(tagFamilyText);
+        tagFamilyText.setText("Tag Family: " + tagFamily.substring(3));
+    }
 
     private void verifyPreferences() {
         SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
@@ -77,7 +124,8 @@ public class ApriltagDetectorActivity extends AppCompatActivity {
                 nproc = 1;
             }
             Log.i(TAG, "available processors: " + nproc);
-            PreferenceManager.getDefaultSharedPreferences(this).edit().putString("nthreads_value", Integer.toString(nproc)).apply();
+            PreferenceManager.getDefaultSharedPreferences(this).edit()
+                    .putString("nthreads_value", Integer.toString(nproc)).apply();
         }
     }
 
@@ -103,7 +151,7 @@ public class ApriltagDetectorActivity extends AppCompatActivity {
         float[] xPointsCanvas = new float[4];
         float[] yPointsCanvas = new float[4];
         for (int i = 0; i < 4; i++) {
-            PointF point = new PointF((float)points[2*i], (float)points[2*i + 1]);
+            PointF point = new PointF((float) points[2 * i], (float) points[2 * i + 1]);
             coordinateTransform.mapPoint(point);
             xPointsCanvas[i] = point.x;
             yPointsCanvas[i] = point.y;
@@ -135,14 +183,14 @@ public class ApriltagDetectorActivity extends AppCompatActivity {
         // Render tag ID in the center of the detection box
         Paint textPaint = new Paint();
         textPaint.setColor(Color.WHITE);
-        textPaint.setTextSize(100);
+        textPaint.setTextSize(64);
         String tagId = String.valueOf(detection.id);
         float textWidth = textPaint.measureText(tagId);
         float textHeight = textPaint.getFontMetrics().descent - textPaint.getFontMetrics().ascent;
-        PointF textCenter = new PointF((float)detection.c[0], (float)detection.c[1]);
+        PointF textCenter = new PointF((float) detection.c[0], (float) detection.c[1]);
         coordinateTransform.mapPoint(textCenter);
-        float textX = (float)(textCenter.x - textWidth / 2);
-        float textY = (float)(textCenter.y + textHeight / 2 - textPaint.getFontMetrics().descent);
+        float textX = (float) (textCenter.x - textWidth / 2);
+        float textY = (float) (textCenter.y + textHeight / 2 - textPaint.getFontMetrics().descent);
         canvas.drawText(tagId, textX, textY, textPaint);
     }
 
@@ -191,15 +239,11 @@ public class ApriltagDetectorActivity extends AppCompatActivity {
             imageAnalysis.setAnalyzer(detectorExecutor, new ImageAnalysis.Analyzer() {
                 @Override
                 public void analyze(@NonNull ImageProxy image) {
-                    long start = System.currentTimeMillis();
-                    ArrayList<ApriltagDetection> detections =
-                            ApriltagNative.apriltag_detect_yuv(
-                                    image.getPlanes()[0].getBuffer(),
-                                    image.getWidth(), image.getHeight(),
-                                    image.getPlanes()[0].getRowStride());
-                    long end = System.currentTimeMillis();
-                    Log.i(TAG, String.format("Image size %dx%d, %d tags detected in %d ms",
-                            image.getWidth(), image.getHeight(), detections.size(), end - start));
+                    ArrayList<ApriltagDetection> detections = ApriltagNative.apriltag_detect_yuv(
+                            image.getPlanes()[0].getBuffer(), image.getWidth(),
+                            image.getHeight(), image.getPlanes()[0].getRowStride());
+                    Log.i(TAG, String.format("Image size %dx%d, %d tags detected",
+                            image.getWidth(), image.getHeight(), detections.size()));
 
                     OutputTransform source =
                             new ImageProxyTransformFactory().getOutputTransform(image);
@@ -214,6 +258,7 @@ public class ApriltagDetectorActivity extends AppCompatActivity {
                             previewViewTransform = previewView.getOutputTransform();
                         });
                     }
+                    updateFps();
 
                     image.close();
                 }
@@ -229,129 +274,22 @@ public class ApriltagDetectorActivity extends AppCompatActivity {
         }, getMainExecutor());
     }
 
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.main);
+    private long lastFpsRenderTime = System.currentTimeMillis();
+    private int detectFrameCount;
 
-        // Add toolbar/actionbar
-        Toolbar myToolbar = (Toolbar) findViewById(R.id.toolbar);
-        setSupportActionBar(myToolbar);
-
-        tagView = findViewById(R.id.tagView);
-
-        // Make the screen stay awake
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-
-        // Create a thread for the detector
-        detectorExecutor = Executors.newSingleThreadExecutor();
-
-        // Ensure we have permission to use the camera (Permission Requesting for Android 6.0/SDK 23 and higher)
-        if (ContextCompat.checkSelfPermission(this,
-                Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            // Assume user knows enough about the app to know why we need the camera, just ask for permission
-            ActivityCompat.requestPermissions(this,
-                    new String[]{Manifest.permission.CAMERA},
-                    MY_PERMISSIONS_REQUEST_CAMERA);
-        } else {
-            this.has_camera_permissions = 1;
-            startCamera();
+    private void updateFps() {
+        long now = System.currentTimeMillis();
+        long diff = now - lastFpsRenderTime;
+        detectFrameCount++;
+        if (diff >= 1000) {
+            final double fps = 1000.0 / diff * detectFrameCount;
+            detectionFpsTextView.post(() ->
+                    detectionFpsTextView.setText(String.format("Detector: %.2f fps", fps)));
+            lastFpsRenderTime = now;
+            detectFrameCount = 0;
         }
     }
 
-    /**
-     * Release the camera when the application is exited
-     */
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        stopThreads();
-        detectorExecutor.shutdown();
-        Log.i(TAG, "Finished destroying.");
-    }
-
-    /**
-     * Release the camera when application focus is lost
-     */
-    protected void onPause() {
-        super.onPause();
-        stopThreads();
-        Log.i(TAG, "Finished pause.");
-    }
-
-    private void stopThreads() {
-        if (mCameraPreviewThread != null) {
-            mCameraPreviewThread.interrupt();
-            mCameraPreviewThread.destroy();
-            try {
-                mCameraPreviewThread.join();
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-            mCameraPreviewThread = null;
-        }
-        if (mDetectionThread != null) {
-            mDetectionThread.interrupt();
-            mDetectionThread.destroy();
-            try {
-                mDetectionThread.join();
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-            mDetectionThread = null;
-        }
-    }
-
-    /**
-     * (Re-)initialize the camera
-     */
-    /*
-    protected void onResume() {
-        super.onResume();
-
-        // Check permissions
-        if (this.has_camera_permissions == 0) {
-            Log.w(TAG, "Missing camera permissions.");
-            return;
-        }
-
-        // DETECTION INIT
-        // Re-initialize the Apriltag detector as settings may have changed
-        verifyPreferences();
-        SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
-        double decimation = Double.parseDouble(sharedPreferences.getString("decimation_list", "8"));
-        double sigma = Double.parseDouble(sharedPreferences.getString("sigma_value", "0"));
-        int nthreads = Integer.parseInt(sharedPreferences.getString("nthreads_value", "4"));
-        boolean diagnosticsEnabled = sharedPreferences.getBoolean("diagnostics_enabled", false);
-        String tagFamily = sharedPreferences.getString("tag_family_list", "tag36h11");
-        Log.i(TAG, String.format("decimation: %f | sigma: %f | nthreads: %d | tagFamily: %s",
-                decimation, sigma, nthreads, tagFamily));
-        ApriltagNative.apriltag_init(tagFamily, 2, decimation, sigma, nthreads);
-
-        // DIAGNOSTICS
-        findViewById(R.id.detectionFpsTextView).setVisibility(diagnosticsEnabled ? View.VISIBLE : View.INVISIBLE);
-        findViewById(R.id.previewFpsTextView).setVisibility(diagnosticsEnabled ? View.VISIBLE : View.INVISIBLE);
-        TextView tagFamilyText = (TextView) findViewById(R.id.tagFamily);
-        stylizeText(tagFamilyText);
-        tagFamilyText.setText("Tag Family: " + tagFamily.substring(3));
-
-        // THREAD INIT
-        // Start the detection process on a separate thread
-        TextureView detectionSurface = (TextureView) findViewById(R.id.tagView);
-        TextView detectionFpsTextView = (TextView) findViewById(R.id.detectionFpsTextView);
-        stylizeText(detectionFpsTextView);
-        mDetectionThread = new DetectionThread(detectionSurface, detectionFpsTextView);
-        mDetectionThread.initialize();
-        mDetectionThread.start();
-
-        // Start the camera preview on a separate thread
-        SurfaceView previewSurface = (SurfaceView) findViewById(R.id.surfaceView);
-        TextView previewFpsTextView = (TextView) findViewById(R.id.previewFpsTextView);
-        stylizeText(previewFpsTextView);
-        mCameraPreviewThread = new CameraPreviewThread(previewSurface.getHolder(), mDetectionThread, previewFpsTextView);
-        mCameraPreviewThread.initialize();
-        mCameraPreviewThread.start();
-    }
-//*/
     private void stylizeText(TextView textView) {
         textView.setTextColor(Color.GREEN);
         textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
@@ -378,10 +316,8 @@ public class ApriltagDetectorActivity extends AppCompatActivity {
             case R.id.reset:
                 // Reset all shared preferences to default values
                 PreferenceManager.getDefaultSharedPreferences(this).edit().clear().commit();
-
                 // Restart the camera preview
-                onPause();
-                onResume();
+                startCamera();
 
                 return true;
 
@@ -393,23 +329,13 @@ public class ApriltagDetectorActivity extends AppCompatActivity {
     @Override
     public void onRequestPermissionsResult(int requestCode,
                                            String permissions[], int[] grantResults) {
-        switch (requestCode) {
-            case MY_PERMISSIONS_REQUEST_CAMERA: {
-                // If request is cancelled, the result arrays are empty.
-                if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    Log.i(TAG, "App GRANTED camera permissions");
-
-                    // Set flag
-                    this.has_camera_permissions = 1;
-
-                    // Restart the camera
-                    onPause();
-                    onResume();
-                } else {
-                    Log.i(TAG, "App DENIED camera permissions");
-                    this.has_camera_permissions = 0;
-                }
-                return;
+        if (requestCode == MY_PERMISSIONS_REQUEST_CAMERA) {
+            // If request is cancelled, the result arrays are empty.
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                Log.i(TAG, "App GRANTED camera permissions");
+                startCamera();
+            } else {
+                Log.i(TAG, "App DENIED camera permissions");
             }
         }
     }
