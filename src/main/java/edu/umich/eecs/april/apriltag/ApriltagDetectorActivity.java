@@ -23,6 +23,7 @@ import android.view.WindowManager;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 import androidx.camera.core.CameraSelector;
@@ -47,6 +48,7 @@ import java.util.concurrent.Executors;
 public class ApriltagDetectorActivity extends AppCompatActivity {
     private static final String TAG = "AprilTag";
     private static final int MY_PERMISSIONS_REQUEST_CAMERA = 77;
+    private static final int SETTINGS_ACTIVITY_CODE = 1;
 
     private ExecutorService detectorExecutor;
     private TextureView tagView;
@@ -89,10 +91,7 @@ public class ApriltagDetectorActivity extends AppCompatActivity {
         detectorExecutor.shutdown();
     }
 
-    @Override
-    protected void onResume() {
-        super.onResume();
-
+    private void applyPreferences() {
         // Re-initialize the Apriltag detector as settings may have changed
         verifyPreferences();
         SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
@@ -242,13 +241,10 @@ public class ApriltagDetectorActivity extends AppCompatActivity {
                     ArrayList<ApriltagDetection> detections = ApriltagNative.apriltag_detect_yuv(
                             image.getPlanes()[0].getBuffer(), image.getWidth(),
                             image.getHeight(), image.getPlanes()[0].getRowStride());
-                    Log.i(TAG, String.format("Image size %dx%d, %d tags detected",
-                            image.getWidth(), image.getHeight(), detections.size()));
-
-                    OutputTransform source =
-                            new ImageProxyTransformFactory().getOutputTransform(image);
 
                     if (previewViewTransform != null) {
+                        OutputTransform source =
+                                new ImageProxyTransformFactory().getOutputTransform(image);
                         CoordinateTransform coordinateTransform =
                                 new CoordinateTransform(source, previewViewTransform);
                         renderDetections(detections, coordinateTransform);
@@ -266,6 +262,7 @@ public class ApriltagDetectorActivity extends AppCompatActivity {
 
             try {
                 cameraProvider.unbindAll();
+                applyPreferences();
                 cameraProvider.bindToLifecycle(ApriltagDetectorActivity.this, cameraSelector,
                         imageAnalysis, preview);
             } catch (Exception ex) {
@@ -284,7 +281,7 @@ public class ApriltagDetectorActivity extends AppCompatActivity {
         if (diff >= 1000) {
             final double fps = 1000.0 / diff * detectFrameCount;
             detectionFpsTextView.post(() ->
-                    detectionFpsTextView.setText(String.format("Detector: %.2f fps", fps)));
+                    detectionFpsTextView.setText(String.format("%.2f fps Detect", fps)));
             lastFpsRenderTime = now;
             detectFrameCount = 0;
         }
@@ -310,16 +307,18 @@ public class ApriltagDetectorActivity extends AppCompatActivity {
                 verifyPreferences();
                 Intent intent = new Intent();
                 intent.setClassName(this, "edu.umich.eecs.april.apriltag.SettingsActivity");
-                startActivity(intent);
+                startActivityForResult(intent, SETTINGS_ACTIVITY_CODE);
                 return true;
 
+            // TODO(john): Fix crash, possibly because detector is still running when preferences change.
+            /*
             case R.id.reset:
                 // Reset all shared preferences to default values
                 PreferenceManager.getDefaultSharedPreferences(this).edit().clear().commit();
                 // Restart the camera preview
                 startCamera();
-
                 return true;
+            */
 
             default:
                 return super.onOptionsItemSelected(item);
@@ -337,6 +336,17 @@ public class ApriltagDetectorActivity extends AppCompatActivity {
             } else {
                 Log.i(TAG, "App DENIED camera permissions");
             }
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        if (requestCode == SETTINGS_ACTIVITY_CODE) {
+            Log.i(TAG, "Returned from settings activity");
+            // Restart the camera to apply new settings
+            startCamera();
         }
     }
 }
