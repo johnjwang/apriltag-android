@@ -128,11 +128,12 @@ public class ApriltagDetectorActivity extends AppCompatActivity {
         double decimation = Double.parseDouble(sharedPreferences.getString("decimation_list", "8"));
         double sigma = Double.parseDouble(sharedPreferences.getString("sigma_value", "0"));
         int nthreads = Integer.parseInt(sharedPreferences.getString("nthreads_value", "4"));
+        int max_hamming_error = Integer.parseInt(sharedPreferences.getString("max_hamming_error", "0"));
         boolean diagnosticsEnabled = sharedPreferences.getBoolean("diagnostics_enabled", false);
         String tagFamily = sharedPreferences.getString("tag_family_list", "tag36h11");
         Log.i(TAG, String.format("decimation: %f | sigma: %f | nthreads: %d | tagFamily: %s",
                 decimation, sigma, nthreads, tagFamily));
-        ApriltagNative.apriltag_init(tagFamily, 2, decimation, sigma, nthreads);
+        ApriltagNative.apriltag_init(tagFamily, max_hamming_error, decimation, sigma, nthreads);
 
         // DIAGNOSTICS
         findViewById(R.id.detectionFpsTextView).setVisibility(diagnosticsEnabled ? View.VISIBLE : View.INVISIBLE);

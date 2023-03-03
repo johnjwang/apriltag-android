@@ -71,6 +71,8 @@ public class CameraPreviewThread extends Thread {
 
     public void destroy() {
         mSurfaceHolder.removeCallback(mCallback);
+        mCamera.setPreviewCallback(null);
+        mCamera.stopPreview();
         mCamera.release();
         mCamera = null;
     }

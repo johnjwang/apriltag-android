@@ -64,7 +64,7 @@ public class DetectionThread extends Thread {
     }
 
     public void enqueueCameraFrame(byte[] data, Camera.Size cameraSize) throws InterruptedException {
-        if (mCameraSize != cameraSize) {
+        if (mCameraSize == null || mCameraSize.width != cameraSize.width || mCameraSize.height != cameraSize.height) {
             mCameraFrameQueue.clear();
             mCameraSize = cameraSize;
             Log.w(TAG, "Camera size changed during preview");
